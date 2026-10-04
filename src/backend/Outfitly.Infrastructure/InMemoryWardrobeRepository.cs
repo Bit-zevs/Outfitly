@@ -9,9 +9,9 @@ public sealed class InMemoryWardrobeRepository : IWardrobeRepository
     private readonly List<Outfit> _outfits = [];
     private readonly List<ShareLink> _links = [];
 
-    public IReadOnlyCollection<WardrobeItem> GetAll() => _items.AsReadOnly();
-    public IReadOnlyCollection<Outfit> GetOutfits() => _outfits.AsReadOnly();
-    public IReadOnlyCollection<ShareLink> GetLinks() => _links.AsReadOnly();
+    public IReadOnlyCollection<WardrobeItem> GetAll() => _items.ToArray();
+    public IReadOnlyCollection<Outfit> GetOutfits() => _outfits.ToArray();
+    public IReadOnlyCollection<ShareLink> GetLinks() => _links.ToArray();
 
     public void Add(WardrobeItem item)
     {
