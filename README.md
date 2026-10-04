@@ -98,3 +98,25 @@ dotnet run --project tests/backend/Outfitly.Tests/Outfitly.Tests.csproj
 ```
 
 It reports each scenario and exits with a nonzero status if a check fails.
+
+Review regression tests also exercise an in-flight repository read overlapping
+with a write on another thread. The overlap is deterministic, without sleeps or
+stress-loop timing. This checks read safety, not full transaction isolation.
+
+Run the development server's HTTP boundary tests with:
+
+```shell
+cd src/frontend
+npm test
+```
+
+These tests start the actual server against temporary files, use port 5173
+(stop any existing development server first), and clean up after completion.
+They check query parameters and attempts to read files outside the frontend root.
+Tests added for review findings assert the desired behavior and may fail until
+the corresponding implementation defect is fixed. No production fixes are
+included in this test-only change.
+
+`OwnerId` disclosure is not tested as a forbidden behavior: the public DTO
+contract currently includes it, and a privacy policy must first decide whether
+that identifier should be omitted.

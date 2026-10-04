@@ -5,6 +5,29 @@ using Outfitly.Infrastructure;
 // Dependency-free executable regression suite. Nonzero exit code signals failure.
 var tests = new (string Name, Action Run)[]
 {
+    ("An in-flight repository read survives a write on another thread", () =>
+    {
+        var repository = new InMemoryWardrobeRepository();
+        var service = new WardrobeService(repository);
+        var owner = Guid.NewGuid();
+        var first = service.CreateItem(owner, "Shirt", ClothingCategory.Top);
+        var shoes = service.CreateItem(owner, "Shoes", ClothingCategory.Footwear);
+        using var read = repository.GetAll().GetEnumerator();
+        Check(read.MoveNext());
+        Check(read.Current.Id == first.Id);
+
+        // Awaiting the write forces overlap with the suspended read without
+        // sleeps or dependence on the operating system's thread scheduling.
+        Task.Run(() => service.CreateItem(owner, "Coat", ClothingCategory.Outerwear))
+            .GetAwaiter().GetResult();
+
+        var observed = new List<Guid> { first.Id };
+        while (read.MoveNext())
+            observed.Add(read.Current.Id);
+        Check(observed.Contains(shoes.Id));
+        Check(observed.Distinct().Count() == observed.Count);
+        Check(repository.GetAll().Count == 3);
+    }),
     ("Entities validate identifiers and required names", () =>
     {
         Throws<ArgumentException>(() => new User(Guid.Empty, "User"));
