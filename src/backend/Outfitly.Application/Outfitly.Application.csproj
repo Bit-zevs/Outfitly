@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\Outfitly.Domain\Outfitly.Domain.csproj" />
+  </ItemGroup>
+</Project>

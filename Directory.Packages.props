@@ -1,0 +1,18 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!--
+    Keep package versions here, but do not select dependencies globally.
+    A layer opts in from its own .csproj without a Version attribute:
+
+      Here:    <PackageVersion Include="Package.Name" Version="1.2.3" />
+      .csproj: <PackageReference Include="Package.Name" />
+
+    Package versions are added together with the projects that use them.
+  -->
+  <ItemGroup>
+  </ItemGroup>
+</Project>

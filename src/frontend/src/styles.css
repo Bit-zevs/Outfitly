@@ -1,0 +1,29 @@
+:root {
+  color: #1f2933;
+  background: #f7f4ef;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+.page {
+  width: min(40rem, calc(100% - 2rem));
+  margin: 8rem auto;
+}
+
+.eyebrow {
+  color: #7b5f4b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+button {
+  padding: 0.75rem 1rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: white;
+  background: #6f4e37;
+  cursor: pointer;
+}

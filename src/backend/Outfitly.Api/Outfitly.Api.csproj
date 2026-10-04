@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\Outfitly.Application\Outfitly.Application.csproj" />
+    <ProjectReference Include="..\Outfitly.Infrastructure\Outfitly.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
