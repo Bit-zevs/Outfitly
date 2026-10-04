@@ -16,6 +16,12 @@ public sealed class ShareLink
     public Guid TargetId { get; }
     public bool IsActive { get; private set; } = true;
 
+    // Rehydration must restore the persisted token without generating another one.
+    private ShareLink()
+    {
+        Token = null!;
+    }
+
     public ShareLink(Guid id, ShareTargetType targetType, Guid targetId)
     {
         Id = Guard.Id(id);

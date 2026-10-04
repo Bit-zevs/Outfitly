@@ -28,7 +28,7 @@ Api -> Application <- Infrastructure
 ## Shared configuration
 
 - `Directory.Build.props` contains common .NET compiler settings.
-- `Directory.Packages.props` is the single source of NuGet package versions.
+- `Directory.Packages.props` contains shared NuGet package versions; Infrastructure imports it and declares its EF/Npgsql versions in a layer-local `Directory.Packages.props`.
 - Each future `.csproj` selects only the packages needed by that layer using `PackageReference` without `Version`.
 - `global.json` pins the .NET SDK used by the solution.
 
@@ -81,23 +81,32 @@ for forbidden domain transitions. Public/shared reads return snapshots without
 share tokens; invalid, disabled or deleted share targets return null.
 The existing `GET /api/wardrobe` returns only public items.
 
-The implementation currently uses an in-memory repository and does not provide
-authentication, durable storage, or HTTP write/share endpoints. Future endpoints
+The API currently uses an in-memory repository and does not provide
+authentication or HTTP write/share endpoints. Infrastructure also contains an EF Core
+PostgreSQL implementation and migrations; connecting it to HTTP use cases requires
+a scoped service and one save per completed use case. See
+[Infrastructure setup](src/backend/Outfitly.Infrastructure/README.md). Future endpoints
 must obtain the actor identifier from authenticated identity. A persistent
 repository must save affected objects and links in one transaction; the current
 repository tracks changes by reference and is intended for this initial skeleton.
 
 ## Regression checks
 
-The dependency-free executable test project covers domain and Application rules
-with the in-memory repository. Run it explicitly (it is not a test-framework
-project discovered by `dotnet test`):
+Backend tests use xUnit and are discovered by `dotnet test`:
 
 ```shell
-dotnet run --project tests/backend/Outfitly.Tests/Outfitly.Tests.csproj
+dotnet test Outfitly.sln
 ```
 
-It reports each scenario and exits with a nonzero status if a check fails.
+Tests are grouped under `tests/backend/Outfitly.Tests/Domain`, `Application`, and
+`Infrastructure`. They cover domain boundaries, authorization, publication/sharing,
+deletion, persistence and transaction rollback. Each test has independent data;
+database assertions use a fresh context. SQLite checks run without an external server.
+Actual PostgreSQL migration/constraint tests require `OUTFITLY_TEST_CONNECTION_STRING`
+pointing to a dedicated test database. Without it, these tests are explicitly skipped.
+Each PostgreSQL test creates and deletes its own randomly named schema; the test user
+must have permission to create schemas. A configured but unreachable database fails
+the tests rather than falling back to SQLite. See [test strategy](tests/backend/Outfitly.Tests/README.md).
 
 Review regression tests also exercise an in-flight repository read overlapping
 with a write on another thread. The overlap is deterministic, without sleeps or
