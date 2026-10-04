@@ -8,12 +8,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Outfitly.Infrastructure", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Outfitly.Api", "src\backend\Outfitly.Api\Outfitly.Api.csproj", "{7AC6D10B-49C7-4E44-A3C5-D4B469B03BDF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Outfitly.Tests", "tests\backend\Outfitly.Tests\Outfitly.Tests.csproj", "{6813D204-7872-412B-A00A-8E12F3123B04}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6813D204-7872-412B-A00A-8E12F3123B04}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6813D204-7872-412B-A00A-8E12F3123B04}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6813D204-7872-412B-A00A-8E12F3123B04}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6813D204-7872-412B-A00A-8E12F3123B04}.Release|Any CPU.Build.0 = Release|Any CPU
 		{10B60226-B9F4-4B5D-892C-A06B5900A60B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{10B60226-B9F4-4B5D-892C-A06B5900A60B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{10B60226-B9F4-4B5D-892C-A06B5900A60B}.Release|Any CPU.ActiveCfg = Release|Any CPU

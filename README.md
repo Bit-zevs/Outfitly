@@ -50,3 +50,51 @@ npm run build
 ```
 
 The frontend build is written to `src/frontend/dist`.
+
+## Domain model
+
+- `User` owns wardrobe items and outfits; authentication is outside the domain.
+- `WardrobeItem` stores its owner, name, category and optional characteristics.
+- `Outfit` stores references to its owner's items without duplicates.
+- `ShareLink` grants read access to one item or outfit using a random 256-bit token.
+
+Items and outfits start private. Publication and share links are independent.
+Empty outfits can be saved but cannot be published or shared.
+Public/shared outfits include their private items in context without publishing
+those items separately.
+
+`WardrobeService` in Application checks ownership and referenced objects, handles
+publication and links, and coordinates deletion. Deleting an item removes it from
+all outfits; empty outfits become private and their links are deactivated.
+Deleting an item or outfit deactivates all links targeting that object.
+Removing the last item from an outfit has the same effect on outfit visibility.
+Disabled links stay disabled even if the outfit is filled again.
+
+Required names are trimmed and cannot be blank. Identifiers cannot be empty.
+Optional blank characteristics become null; photo URLs, when provided, must use
+absolute HTTP or HTTPS addresses. Updating characteristics replaces all optional
+values, so omitted values clear the previous values.
+
+Application throws `UnauthorizedAccessException` for a foreign owner,
+`KeyNotFoundException` for a missing object, and `InvalidOperationException`
+for forbidden domain transitions. Public/shared reads return snapshots without
+share tokens; invalid, disabled or deleted share targets return null.
+The existing `GET /api/wardrobe` returns only public items.
+
+The implementation currently uses an in-memory repository and does not provide
+authentication, durable storage, or HTTP write/share endpoints. Future endpoints
+must obtain the actor identifier from authenticated identity. A persistent
+repository must save affected objects and links in one transaction; the current
+repository tracks changes by reference and is intended for this initial skeleton.
+
+## Regression checks
+
+The dependency-free executable test project covers domain and Application rules
+with the in-memory repository. Run it explicitly (it is not a test-framework
+project discovered by `dotnet test`):
+
+```shell
+dotnet run --project tests/backend/Outfitly.Tests/Outfitly.Tests.csproj
+```
+
+It reports each scenario and exits with a nonzero status if a check fails.
