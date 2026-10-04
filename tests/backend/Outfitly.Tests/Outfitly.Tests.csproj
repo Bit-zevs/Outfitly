@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/backend/Outfitly.Domain/Outfitly.Domain.csproj" />
+    <ProjectReference Include="../../../src/backend/Outfitly.Application/Outfitly.Application.csproj" />
+    <ProjectReference Include="../../../src/backend/Outfitly.Infrastructure/Outfitly.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>
