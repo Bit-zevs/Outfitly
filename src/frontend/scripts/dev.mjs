@@ -1,15 +1,24 @@
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { extname, join, normalize } from 'node:path';
+import { extname, isAbsolute, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = new URL('../', import.meta.url).pathname.slice(1);
+const root = fileURLToPath(new URL('../', import.meta.url));
 const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript' };
 
 createServer(async (request, response) => {
-  const requestedPath = request.url === '/' ? 'index.html' : request.url.slice(1);
-  const filePath = normalize(join(root, requestedPath));
+  let pathname;
+  try {
+    pathname = decodeURIComponent((request.url ?? '/').split('?')[0]);
+  } catch {
+    response.writeHead(400).end('Invalid path');
+    return;
+  }
+  const requestedPath = pathname === '/' ? 'index.html' : pathname.slice(1);
+  const filePath = join(root, requestedPath);
+  const relativePath = relative(root, filePath);
 
-  if (!filePath.startsWith(normalize(root))) {
+  if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
     response.writeHead(403).end();
     return;
   }

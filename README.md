@@ -21,6 +21,7 @@ src/frontend/   # HTML/CSS/JavaScript и скрипты разработки
 tests/backend/  # xUnit: домен, use cases, хранение, HTTP
 tests/frontend/ # HTTP-проверки dev server
 docs/           # Архитектура и навигация
+.github/workflows/ # CI: backend с PostgreSQL и frontend
 ```
 
 Backend использует .NET 10 и EF Core/PostgreSQL. Аутентификация и интеграция frontend
