@@ -15,6 +15,7 @@ internal sealed class OutfitConfiguration : IEntityTypeConfiguration<Outfit>
         builder.Property(outfit => outfit.Name).IsRequired();
         builder.Property(outfit => outfit.Description);
         builder.Property(outfit => outfit.IsPublic);
+        builder.Property<Guid>("Revision").IsConcurrencyToken();
         builder.Ignore(outfit => outfit.ItemIds);
         builder.HasAlternateKey(outfit => new { outfit.Id, outfit.OwnerId });
         builder.HasIndex(outfit => outfit.OwnerId);

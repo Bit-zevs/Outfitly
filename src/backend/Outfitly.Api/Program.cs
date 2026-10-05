@@ -5,6 +5,7 @@ using Outfitly.Api.Endpoints;
 using Outfitly.Api.Errors;
 using Microsoft.AspNetCore.Authentication;
 using System.Text.Json.Serialization;
+using Outfitly.Api.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,7 +18,10 @@ builder.Services.AddAuthentication(PendingAuthenticationHandler.SchemeName)
 builder.Services.AddAuthorization(options => options.AddPolicy(CurrentActor.PolicyName,
     policy => policy.RequireAuthenticatedUser().RequireAssertion(context => CurrentActor.HasValidId(context.User))));
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
+{
+    options.SerializerOptions.Converters.Add(new ClothingCategoryJsonConverter());
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false));
+});
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 

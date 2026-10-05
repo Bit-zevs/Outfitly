@@ -16,7 +16,8 @@ using Outfitly.Infrastructure.Persistence;
 
 namespace Outfitly.Tests.Api;
 
-internal sealed class ApiFactory(bool testAuthentication = true) : WebApplicationFactory<Program>
+internal sealed class ApiFactory(bool testAuthentication = true,
+    Action<DbContextOptionsBuilder>? configureDatabase = null) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection connection = new("Data Source=:memory:;Foreign Keys=True");
 
@@ -29,7 +30,11 @@ internal sealed class ApiFactory(bool testAuthentication = true) : WebApplicatio
         {
             services.RemoveAll<DbContextOptions<OutfitlyDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<OutfitlyDbContext>>();
-            services.AddDbContext<OutfitlyDbContext>(options => options.UseSqlite(connection));
+            services.AddDbContext<OutfitlyDbContext>(options =>
+            {
+                options.UseSqlite(connection);
+                configureDatabase?.Invoke(options);
+            });
             if (testAuthentication)
                 services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>("Test", _ => { });
         });

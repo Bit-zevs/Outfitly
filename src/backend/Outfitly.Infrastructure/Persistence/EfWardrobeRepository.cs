@@ -13,6 +13,16 @@ public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeR
     public IReadOnlyCollection<Outfit> GetOutfits() => Read(context.Outfits);
     public IReadOnlyCollection<ShareLink> GetLinks() => Read(context.ShareLinks);
 
+    public void MarkOutfitChanged(Outfit outfit)
+    {
+        // Preserve OriginalValue from the first tracked read. Even link-only and
+        // membership-only commands must update the parent row in the same transaction.
+        var entry = context.Entry(outfit);
+        if (entry.State == EntityState.Detached)
+            throw new InvalidOperationException("Read the outfit in this unit of work before changing it.");
+        entry.Property<Guid>("Revision").CurrentValue = Guid.NewGuid();
+    }
+
     public void Add(WardrobeItem item)
     {
         ArgumentNullException.ThrowIfNull(item);

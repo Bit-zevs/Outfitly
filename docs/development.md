@@ -38,7 +38,7 @@ GET /health проверяет HTTP-приложение, а не доступн
 Задайте `OUTFITLY_TEST_CONNECTION_STRING` на отдельную тестовую базу:
 
 ```powershell
-dotnet test Outfitly.sln --filter "FullyQualifiedName~PostgreSqlTests"
+dotnet test Outfitly.sln --filter "FullyQualifiedName~PostgreSql"
 ```
 
 Нужны права создания схем. Каждый тест создаёт схему `outfitly_test_<guid>`
