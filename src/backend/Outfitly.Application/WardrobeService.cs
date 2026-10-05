@@ -134,7 +134,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     public IReadOnlyCollection<OutfitView> GetMyOutfits(Guid actorId)
     {
         RequireActor(actorId);
-        return repository.GetOutfits().Where(outfit => outfit.OwnerId == actorId).Select(View).ToArray();
+        return Views(repository.GetOutfits().Where(outfit => outfit.OwnerId == actorId));
     }
 
     public ItemView GetItem(Guid actorId, Guid itemId)
@@ -155,7 +155,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         repository.GetAll().Where(item => item.IsPublic).Select(View).ToArray();
 
     public IReadOnlyCollection<OutfitView> GetPublicOutfits() =>
-        repository.GetOutfits().Where(outfit => outfit.IsPublic).Select(View).ToArray();
+        Views(repository.GetOutfits().Where(outfit => outfit.IsPublic));
 
     public ItemView? GetSharedItem(string token)
     {
@@ -216,7 +216,17 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         new(item.Id, item.OwnerId, item.Name, item.Category, item.Color, item.Size,
             item.Brand, item.Description, item.PhotoUrl, item.IsPublic);
 
-    private OutfitView View(Outfit outfit) =>
+    private OutfitView View(Outfit outfit) => Views([outfit]).Single();
+
+    private IReadOnlyCollection<OutfitView> Views(IEnumerable<Outfit> outfits)
+    {
+        var selected = outfits.ToArray();
+        if (selected.Length == 0) return [];
+        var items = repository.GetAll().ToDictionary(item => item.Id);
+        return selected.Select(outfit => View(outfit, items)).ToArray();
+    }
+
+    private static OutfitView View(Outfit outfit, IReadOnlyDictionary<Guid, WardrobeItem> items) =>
         new(outfit.Id, outfit.OwnerId, outfit.Name, outfit.Description, outfit.IsPublic,
-            outfit.ItemIds.Select(id => View(Item(id))).ToArray());
+            outfit.ItemIds.Select(id => View(items[id])).ToArray());
 }
