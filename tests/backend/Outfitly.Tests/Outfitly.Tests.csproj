@@ -8,9 +8,11 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <Using Include="Xunit" />
     <ProjectReference Include="../../../src/backend/Outfitly.Domain/Outfitly.Domain.csproj" />
     <ProjectReference Include="../../../src/backend/Outfitly.Application/Outfitly.Application.csproj" />
     <ProjectReference Include="../../../src/backend/Outfitly.Infrastructure/Outfitly.Infrastructure.csproj" />
+    <ProjectReference Include="../../../src/backend/Outfitly.Api/Outfitly.Api.csproj" />
   </ItemGroup>
 </Project>
