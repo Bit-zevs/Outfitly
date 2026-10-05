@@ -3,8 +3,7 @@ using Outfitly.Domain;
 namespace Outfitly.Application;
 
 // actorId must come from the authenticated user, never from a client-supplied owner field.
-// This initial repository tracks changes in memory; a persistent implementation will need
-// a transaction covering item deletion, affected outfits and link deactivation.
+// The caller commits each completed command once through IUnitOfWork.
 public sealed class WardrobeService(IWardrobeRepository repository)
 {
     public WardrobeItem CreateItem(Guid actorId, string name, ClothingCategory category,
@@ -114,6 +113,32 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     }
 
     // Views intentionally contain neither share tokens nor mutable domain entities.
+    public IReadOnlyCollection<ItemView> GetMyItems(Guid actorId)
+    {
+        RequireActor(actorId);
+        return repository.GetAll().Where(item => item.OwnerId == actorId).Select(View).ToArray();
+    }
+
+    public IReadOnlyCollection<OutfitView> GetMyOutfits(Guid actorId)
+    {
+        RequireActor(actorId);
+        return repository.GetOutfits().Where(outfit => outfit.OwnerId == actorId).Select(View).ToArray();
+    }
+
+    public ItemView GetItem(Guid actorId, Guid itemId)
+    {
+        var item = Item(itemId);
+        RequireOwner(actorId, item.OwnerId);
+        return View(item);
+    }
+
+    public OutfitView GetOutfit(Guid actorId, Guid outfitId)
+    {
+        var outfit = Outfit(outfitId);
+        RequireOwner(actorId, outfit.OwnerId);
+        return View(outfit);
+    }
+
     public IReadOnlyCollection<ItemView> GetPublicItems() =>
         repository.GetAll().Where(item => item.IsPublic).Select(View).ToArray();
 
@@ -161,6 +186,12 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     {
         if (actorId == Guid.Empty || actorId != ownerId)
             throw new UnauthorizedAccessException("Only the owner can perform this operation.");
+    }
+
+    private static void RequireActor(Guid actorId)
+    {
+        if (actorId == Guid.Empty)
+            throw new UnauthorizedAccessException("An authenticated user is required.");
     }
 
     private void DeactivateLinks(ShareTargetType type, Guid id)

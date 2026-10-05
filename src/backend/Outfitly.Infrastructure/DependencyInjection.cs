@@ -14,6 +14,7 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddDbContext<OutfitlyDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWardrobeRepository, EfWardrobeRepository>();
+        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<OutfitlyDbContext>());
         return services;
     }
 }
