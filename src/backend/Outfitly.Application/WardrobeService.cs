@@ -37,6 +37,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         var outfit = Outfit(outfitId);
         RequireOwner(actorId, outfit.OwnerId);
         outfit.Update(name, description);
+        repository.MarkOutfitChanged(outfit);
     }
 
     public void AddItemToOutfit(Guid actorId, Guid outfitId, Guid itemId)
@@ -46,6 +47,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         var item = Item(itemId);
         RequireOwner(actorId, item.OwnerId);
         outfit.AddItem(item);
+        repository.MarkOutfitChanged(outfit);
     }
 
     public void RemoveItemFromOutfit(Guid actorId, Guid outfitId, Guid itemId)
@@ -53,6 +55,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         var outfit = Outfit(outfitId);
         RequireOwner(actorId, outfit.OwnerId);
         outfit.RemoveItem(itemId);
+        repository.MarkOutfitChanged(outfit);
         if (outfit.ItemIds.Count == 0)
             DeactivateLinks(ShareTargetType.Outfit, outfit.Id);
     }
@@ -69,6 +72,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         {
             var outfit = Outfit(targetId);
             if (isPublic) outfit.Publish(); else outfit.Unpublish();
+            repository.MarkOutfitChanged(outfit);
         }
     }
 
@@ -76,7 +80,11 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     {
         RequireTargetOwner(actorId, targetType, targetId);
         if (targetType == ShareTargetType.Outfit)
-            Outfit(targetId).EnsureCanShare();
+        {
+            var outfit = Outfit(targetId);
+            outfit.EnsureCanShare();
+            repository.MarkOutfitChanged(outfit);
+        }
         var link = new ShareLink(Guid.NewGuid(), targetType, targetId);
         repository.Add(link);
         return link;
@@ -88,6 +96,8 @@ public sealed class WardrobeService(IWardrobeRepository repository)
             ?? throw new KeyNotFoundException("Share link not found.");
         RequireTargetOwner(actorId, link.TargetType, link.TargetId);
         link.Deactivate();
+        if (link.TargetType == ShareTargetType.Outfit)
+            repository.MarkOutfitChanged(Outfit(link.TargetId));
     }
 
     public void DeleteItem(Guid actorId, Guid itemId)
@@ -97,6 +107,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         foreach (var outfit in repository.GetOutfits().Where(outfit => outfit.ItemIds.Contains(itemId)))
         {
             outfit.RemoveItem(itemId);
+            repository.MarkOutfitChanged(outfit);
             if (outfit.ItemIds.Count == 0)
                 DeactivateLinks(ShareTargetType.Outfit, outfit.Id);
         }
@@ -109,6 +120,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
         var outfit = Outfit(outfitId);
         RequireOwner(actorId, outfit.OwnerId);
         DeactivateLinks(ShareTargetType.Outfit, outfitId);
+        repository.MarkOutfitChanged(outfit);
         repository.Remove(outfit);
     }
 

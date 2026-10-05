@@ -13,6 +13,9 @@ public sealed class InMemoryWardrobeRepository : IWardrobeRepository
     public IReadOnlyCollection<Outfit> GetOutfits() => _outfits.ToArray();
     public IReadOnlyCollection<ShareLink> GetLinks() => _links.ToArray();
 
+    // This single-process test adapter has no independent persistence snapshots.
+    public void MarkOutfitChanged(Outfit outfit) => ArgumentNullException.ThrowIfNull(outfit);
+
     public void Add(WardrobeItem item)
     {
         ArgumentNullException.ThrowIfNull(item);

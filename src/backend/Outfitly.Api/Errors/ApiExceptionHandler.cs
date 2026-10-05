@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Outfitly.Domain;
+using Outfitly.Application;
 
 namespace Outfitly.Api.Errors;
 
@@ -11,6 +12,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
     {
         var status = exception switch
         {
+            WardrobeConcurrencyException => StatusCodes.Status409Conflict,
             ArgumentException => StatusCodes.Status400BadRequest,
             KeyNotFoundException => StatusCodes.Status404NotFound,
             UnauthorizedAccessException => StatusCodes.Status403Forbidden,
@@ -31,7 +33,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         {
             Status = status,
             Title = title,
-            Detail = status == 400 ? exception.Message : null
+            Detail = status == 400 || exception is WardrobeConcurrencyException ? exception.Message : null
         }, options: null, contentType: "application/problem+json", cancellationToken: cancellationToken);
         return true;
     }
