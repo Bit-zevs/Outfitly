@@ -32,6 +32,10 @@ AGENTS.md
 .codex/
 **/.codex/
 
+# Agent-only navigation and supporting documentation
+/docs/code-map.md
+/docs/agents/
+
 # Visual Studio / VS Code
 .vs/
 .vscode/*
