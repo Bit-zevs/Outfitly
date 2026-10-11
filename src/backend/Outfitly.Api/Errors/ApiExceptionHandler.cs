@@ -13,6 +13,9 @@ public sealed class ApiExceptionHandler : IExceptionHandler
     {
         var status = exception switch
         {
+            PhotoTooLargeException => StatusCodes.Status413PayloadTooLarge,
+            UnsupportedPhotoException => StatusCodes.Status415UnsupportedMediaType,
+            BadHttpRequestException bad => bad.StatusCode,
             WardrobeConcurrencyException => StatusCodes.Status409Conflict,
             AccountConflictException => StatusCodes.Status409Conflict,
             ArgumentException => StatusCodes.Status400BadRequest,
@@ -28,6 +31,8 @@ public sealed class ApiExceptionHandler : IExceptionHandler
             403 => "Access denied",
             404 => "Resource not found",
             409 => "The operation conflicts with the current state",
+            413 => "Photo is too large",
+            415 => "Unsupported photo format",
             _ => "An unexpected error occurred"
         };
         context.Response.StatusCode = status;

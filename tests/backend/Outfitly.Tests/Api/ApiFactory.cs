@@ -19,13 +19,23 @@ using Outfitly.Infrastructure.Persistence;
 namespace Outfitly.Tests.Api;
 
 internal sealed class ApiFactory(bool testAuthentication = true,
-    Action<DbContextOptionsBuilder>? configureDatabase = null) : WebApplicationFactory<Program>
+    Action<DbContextOptionsBuilder>? configureDatabase = null, bool frontend = false) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection connection = new("Data Source=:memory:;Foreign Keys=True");
+    internal string PhotoRoot { get; } = Path.Combine(Path.GetTempPath(), $"outfitly-photos-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("Logging:LogLevel:Default", "None");
+        builder.UseSetting("Photos:RootPath", PhotoRoot);
+        if (frontend)
+        {
+            Directory.CreateDirectory(PhotoRoot + "-web");
+            File.WriteAllText(Path.Combine(PhotoRoot + "-web", "index.html"), "<!doctype html><title>Outfitly test frontend</title>");
+            File.WriteAllText(Path.Combine(PhotoRoot + "-web", "main.js"), "fetch('/api/auth/me');");
+            builder.UseWebRoot(PhotoRoot + "-web");
+        }
         builder.UseSetting("ConnectionStrings:Outfitly", "Host=localhost;Database=unused;Username=unused");
         connection.Open();
         builder.ConfigureTestServices(services =>
@@ -82,7 +92,12 @@ internal sealed class ApiFactory(bool testAuthentication = true,
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
-        if (disposing) connection.Dispose();
+        if (disposing)
+        {
+            connection.Dispose();
+            if (Directory.Exists(PhotoRoot)) Directory.Delete(PhotoRoot, true);
+            if (Directory.Exists(PhotoRoot + "-web")) Directory.Delete(PhotoRoot + "-web", true);
+        }
     }
 }
 

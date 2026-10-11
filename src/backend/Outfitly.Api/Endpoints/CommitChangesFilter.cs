@@ -7,11 +7,17 @@ public sealed class CommitChangesFilter : IEndpointFilter
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
-        var result = await next(context);
-        if (result is IStatusCodeHttpResult { StatusCode: >= 400 })
+        var services = context.HttpContext.RequestServices;
+        var photos = services.GetRequiredService<PhotoChanges>();
+        var committed = false;
+        try
+        {
+            var result = await next(context);
+            if (result is IStatusCodeHttpResult { StatusCode: >= 400 }) return result;
+            await services.GetRequiredService<IUnitOfWork>().SaveChangesAsync(context.HttpContext.RequestAborted);
+            committed = true;
             return result;
-        await context.HttpContext.RequestServices.GetRequiredService<IUnitOfWork>()
-            .SaveChangesAsync(context.HttpContext.RequestAborted);
-        return result;
+        }
+        finally { await photos.CompleteAsync(committed); }
     }
 }

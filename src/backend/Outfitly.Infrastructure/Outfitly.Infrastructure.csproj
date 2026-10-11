@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
     <ProjectReference Include="..\Outfitly.Application\Outfitly.Application.csproj" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />

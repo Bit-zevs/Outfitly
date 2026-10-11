@@ -29,7 +29,7 @@ public sealed class CategoryApiTests
         var rejectedCreate = await client.PostAsJsonAsync("/api/items", new { name = "Invalid", category });
         Assert.Equal(HttpStatusCode.BadRequest, rejectedCreate.StatusCode);
         Assert.Equal("application/problem+json", rejectedCreate.Content.Headers.ContentType?.MediaType);
-        Assert.Empty((await client.GetFromJsonAsync<ItemView[]>("/api/items", Json))!);
+        Assert.Empty((await client.GetFromJsonAsync<ItemPage>("/api/items", Json))!.Items);
 
         var created = await client.PostAsJsonAsync("/api/items", new { name = "Original", category = "Top", color = "White" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);

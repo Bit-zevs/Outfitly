@@ -19,6 +19,7 @@ internal sealed class WardrobeItemConfiguration : IEntityTypeConfiguration<Wardr
         builder.Property(item => item.Brand);
         builder.Property(item => item.Description);
         builder.Property(item => item.PhotoUrl);
+        builder.Property(item => item.PhotoStorageKey).IsConcurrencyToken();
         builder.Property(item => item.IsPublic);
         builder.HasAlternateKey(item => new { item.Id, item.OwnerId });
         builder.HasIndex(item => new { item.OwnerId, item.Category });

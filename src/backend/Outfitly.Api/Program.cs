@@ -16,6 +16,17 @@ var connectionString = builder.Configuration.GetConnectionString("Outfitly")
     ?? throw new InvalidOperationException("Configure ConnectionStrings:Outfitly for PostgreSQL.");
 builder.Services.AddOutfitlyInfrastructure(connectionString);
 builder.Services.AddScoped<WardrobeService>();
+builder.Services.AddScoped<PhotoChanges>();
+builder.Services.AddScoped<PhotoService>();
+builder.Services.AddScoped<ItemCatalog>();
+var photoRoot = Path.GetFullPath(builder.Configuration["Photos:RootPath"] ?? "App_Data/photos", builder.Environment.ContentRootPath);
+var webRoot = builder.Environment.WebRootPath ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot");
+var photoRelativePath = Path.GetRelativePath(webRoot, photoRoot);
+if (photoRelativePath == "." || (!Path.IsPathRooted(photoRelativePath) && photoRelativePath != ".." &&
+    !photoRelativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
+    throw new InvalidOperationException("Photos:RootPath must be outside the public web root.");
+builder.Services.AddSingleton<IPhotoStore>(provider => new Outfitly.Infrastructure.Photos.LocalPhotoStore(
+    photoRoot, provider.GetRequiredService<ILogger<Outfitly.Infrastructure.Photos.LocalPhotoStore>>()));
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<SessionCookieEvents>();
 builder.Services.AddDataProtection().SetApplicationName("Outfitly");
@@ -63,6 +74,8 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseHttpsRedirection();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
@@ -70,6 +83,7 @@ app.UseMiddleware<CsrfMiddleware>();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapWardrobeEndpoints();
+app.MapPhotoEndpoints();
 app.MapAuthEndpoints();
 
 app.Run();

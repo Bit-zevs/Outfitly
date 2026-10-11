@@ -43,12 +43,20 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Prepare frontend for API
+        run: npm run prepare:api --prefix src/frontend
       - name: Restore
         run: dotnet restore Outfitly.sln
       - name: Build
         run: dotnet build Outfitly.sln --configuration Release --no-restore
       - name: Test including PostgreSQL migrations
         run: dotnet test Outfitly.sln --configuration Release --no-build --logger trx --results-directory TestResults
+      - name: Publish API with frontend
+        run: dotnet publish src/backend/Outfitly.Api --configuration Release --no-build --output artifacts/publish
 
   frontend:
     name: Frontend

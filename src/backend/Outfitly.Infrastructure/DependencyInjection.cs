@@ -16,6 +16,8 @@ public static class DependencyInjection
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         services.AddDbContext<OutfitlyDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWardrobeRepository, EfWardrobeRepository>();
+        services.AddScoped<IItemCatalogQuery, EfItemCatalogQuery>();
+        services.AddSingleton<IPhotoProcessor, Photos.SkiaPhotoProcessor>();
         services.AddScoped<IAccountStore, EfAccountStore>();
         services.AddSingleton<IAccountPasswordHasher, AccountPasswordHasher>();
         services.AddSingleton(TimeProvider.System);

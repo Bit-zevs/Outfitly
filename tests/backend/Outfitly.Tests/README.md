@@ -76,3 +76,12 @@ AccountPersistenceTests проверяют пароль и обновление 
 PostgreSqlAccountTests применяют миграции и проверяют конкурентную регистрацию,
 атомарность создания аккаунта и сохранение/отзыв сессий.
 Существующие HTTP-тесты frontend dev server запускаются отдельно через `npm test`.
+
+PhotoApiTests проверяют загрузку, замену, доступ по публикации/ссылке/образу,
+CSRF, очистку файлов при неудачном commit и конкурирующей замене. Каждый ApiFactory
+использует отдельный временный каталог фото. PhotoConcurrencyTests читают результат
+через новый контекст; PostgreSQL-сценарий применяет реальные миграции.
+SameOriginApiTests проходят путь frontend → регистрация → cookie → CSRF → загрузка
+на одном HTTPS origin через TestServer. CatalogApiTests проверяют HTTP-контракт,
+PostgreSqlCatalogTests — кириллицу, буквальные шаблоны поиска и стабильные страницы
+на PostgreSQL. ShareLinkListApiTests проверяют повторное получение и отзыв ссылок.
