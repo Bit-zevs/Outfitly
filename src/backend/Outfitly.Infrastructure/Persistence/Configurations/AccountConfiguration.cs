@@ -1,0 +1,32 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Outfitly.Application.Authentication;
+using Outfitly.Domain;
+
+namespace Outfitly.Infrastructure.Persistence.Configurations;
+
+internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
+{
+    public void Configure(EntityTypeBuilder<Account> builder)
+    {
+        builder.ToTable("Accounts");
+        builder.HasKey(account => account.UserId);
+        builder.Property(account => account.UserId).ValueGeneratedNever();
+        builder.Property(account => account.Email).HasMaxLength(254).IsRequired();
+        builder.Property(account => account.NormalizedEmail).HasMaxLength(254).IsRequired();
+        builder.Property(account => account.PasswordHash).IsRequired();
+        builder.HasIndex(account => account.NormalizedEmail).IsUnique();
+        builder.HasOne<User>().WithOne().HasForeignKey<Account>(account => account.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class LoginSessionConfiguration : IEntityTypeConfiguration<LoginSession>
+{
+    public void Configure(EntityTypeBuilder<LoginSession> builder)
+    {
+        builder.ToTable("LoginSessions");
+        builder.HasKey(session => session.Id);
+        builder.Property(session => session.Id).ValueGeneratedNever();
+        builder.HasOne<Account>().WithMany().HasForeignKey(session => session.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

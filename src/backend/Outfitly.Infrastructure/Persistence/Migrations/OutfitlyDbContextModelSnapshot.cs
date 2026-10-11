@@ -42,6 +42,54 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.ToTable("OutfitItems", (string)null);
                 });
 
+            modelBuilder.Entity("Outfitly.Application.Authentication.Account", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("NormalizedEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("UserId");
+
+                    b.HasIndex("NormalizedEmail")
+                        .IsUnique();
+
+                    b.ToTable("Accounts", (string)null);
+                });
+
+            modelBuilder.Entity("Outfitly.Application.Authentication.LoginSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRevoked")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("LoginSessions", (string)null);
+                });
+
             modelBuilder.Entity("Outfitly.Domain.Outfit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -170,6 +218,24 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .HasForeignKey("WardrobeItemId", "OwnerId")
                         .HasPrincipalKey("Id", "OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Application.Authentication.Account", b =>
+                {
+                    b.HasOne("Outfitly.Domain.User", null)
+                        .WithOne()
+                        .HasForeignKey("Outfitly.Application.Authentication.Account", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Application.Authentication.LoginSession", b =>
+                {
+                    b.HasOne("Outfitly.Application.Authentication.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

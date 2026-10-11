@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Outfitly.Domain;
 using Outfitly.Application;
+using Outfitly.Application.Authentication;
 
 namespace Outfitly.Api.Errors;
 
@@ -13,6 +14,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         var status = exception switch
         {
             WardrobeConcurrencyException => StatusCodes.Status409Conflict,
+            AccountConflictException => StatusCodes.Status409Conflict,
             ArgumentException => StatusCodes.Status400BadRequest,
             KeyNotFoundException => StatusCodes.Status404NotFound,
             UnauthorizedAccessException => StatusCodes.Status403Forbidden,

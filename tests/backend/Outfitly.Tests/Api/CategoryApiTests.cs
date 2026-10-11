@@ -24,7 +24,7 @@ public sealed class CategoryApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
 
         var rejectedCreate = await client.PostAsJsonAsync("/api/items", new { name = "Invalid", category });
         Assert.Equal(HttpStatusCode.BadRequest, rejectedCreate.StatusCode);
@@ -52,7 +52,7 @@ public sealed class CategoryApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         var created = await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = name });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         var item = (await created.Content.ReadFromJsonAsync<ItemView>(Json))!;

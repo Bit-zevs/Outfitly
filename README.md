@@ -24,6 +24,6 @@ docs/           # Архитектура и навигация
 .github/workflows/ # CI: backend с PostgreSQL и frontend
 ```
 
-Backend использует .NET 10 и EF Core/PostgreSQL. Аутентификация и интеграция frontend
-отложены; защищённые маршруты сейчас возвращают 401. Точное текущее состояние
+Backend использует .NET 10 и EF Core/PostgreSQL; доступны регистрация и вход по email/паролю.
+Интеграция frontend отложена. Точное текущее состояние
 описано в [архитектуре](docs/architecture.md).
