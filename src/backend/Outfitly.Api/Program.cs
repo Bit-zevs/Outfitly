@@ -3,7 +3,10 @@ using Outfitly.Infrastructure;
 using Outfitly.Api.Authentication;
 using Outfitly.Api.Endpoints;
 using Outfitly.Api.Errors;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
+using System.Threading.RateLimiting;
+using Outfitly.Application.Authentication;
 using System.Text.Json.Serialization;
 using Outfitly.Api.Contracts;
 
@@ -13,8 +16,39 @@ var connectionString = builder.Configuration.GetConnectionString("Outfitly")
     ?? throw new InvalidOperationException("Configure ConnectionStrings:Outfitly for PostgreSQL.");
 builder.Services.AddOutfitlyInfrastructure(connectionString);
 builder.Services.AddScoped<WardrobeService>();
-builder.Services.AddAuthentication(PendingAuthenticationHandler.SchemeName)
-    .AddScheme<AuthenticationSchemeOptions, PendingAuthenticationHandler>(PendingAuthenticationHandler.SchemeName, _ => { });
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<SessionCookieEvents>();
+builder.Services.AddDataProtection().SetApplicationName("Outfitly");
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+{
+    options.Cookie.Name = "__Host-Outfitly.Auth";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.Path = "/";
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = false;
+    options.EventsType = typeof(SessionCookieEvents);
+});
+builder.Services.AddAntiforgery(options =>
+{
+    options.HeaderName = "X-CSRF-TOKEN";
+    options.Cookie.Name = "__Host-Outfitly.Csrf";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.Cookie.Path = "/";
+});
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("account-access", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+        }));
+    options.OnRejected = async (context, _) =>
+        await Results.Problem(statusCode: 429, title: "Too many account requests").ExecuteAsync(context.HttpContext);
+});
 builder.Services.AddAuthorization(options => options.AddPolicy(CurrentActor.PolicyName,
     policy => policy.RequireAuthenticatedUser().RequireAssertion(context => CurrentActor.HasValidId(context.User))));
 builder.Services.ConfigureHttpJsonOptions(options =>
@@ -28,11 +62,15 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
+app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
+app.UseMiddleware<CsrfMiddleware>();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapWardrobeEndpoints();
+app.MapAuthEndpoints();
 
 app.Run();
 
