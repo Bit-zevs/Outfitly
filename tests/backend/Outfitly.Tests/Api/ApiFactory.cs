@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -49,11 +51,32 @@ internal sealed class ApiFactory(bool testAuthentication = true,
         await context.SaveChangesAsync();
     }
 
-    internal HttpClient OwnerClient(Guid id)
+    internal new HttpClient CreateClient() => base.CreateClient(new WebApplicationFactoryClientOptions
+    {
+        BaseAddress = new Uri("https://localhost"), AllowAutoRedirect = false
+    });
+
+    internal async Task InitializeDatabaseAsync()
+    {
+        using var scope = Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Database.EnsureCreatedAsync();
+    }
+
+    internal async Task<HttpClient> OwnerClientAsync(Guid id)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.Add("X-Test-User", id.ToString());
+        await SetCsrfAsync(client);
         return client;
+    }
+
+    internal static async Task SetCsrfAsync(HttpClient client)
+    {
+        var response = await client.GetAsync("/api/auth/csrf");
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
+        client.DefaultRequestHeaders.Add("X-CSRF-TOKEN", body.GetProperty("token").GetString());
     }
 
     protected override void Dispose(bool disposing)

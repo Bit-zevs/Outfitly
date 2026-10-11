@@ -18,7 +18,7 @@ public sealed class ConcurrencyApiTests
         using var factory = new ApiFactory(configureDatabase: options => options.AddInterceptors(beforeCommit));
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         var itemResponse = await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" });
         var itemId = (await itemResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
         var outfitResponse = await client.PostAsJsonAsync("/api/outfits", new { name = "Daily" });

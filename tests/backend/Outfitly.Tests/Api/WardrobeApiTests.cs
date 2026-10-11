@@ -14,7 +14,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         using var anonymous = factory.CreateClient();
         var itemId = (await Json(await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })))
             .GetProperty("id").GetGuid();
@@ -44,7 +44,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         var id = (await Json(await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })))
             .GetProperty("id").GetGuid();
         Assert.Equal(HttpStatusCode.NoContent, (await client.PatchAsJsonAsync($"/api/items/{id}/publication", new { isPublic = true })).StatusCode);
@@ -104,7 +104,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
 
         var created = await client.PostAsJsonAsync("/api/items", new
         {
@@ -140,7 +140,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
 
         var response = await client.PostAsync("/api/items", new StringContent(json, Encoding.UTF8, "application/json"));
 
@@ -157,10 +157,10 @@ public sealed class WardrobeApiTests
         var other = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
         await factory.SeedOwnerAsync(other);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         var item = await Json(await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" }));
         var id = item.GetProperty("id").GetGuid();
-        using var stranger = factory.OwnerClient(other);
+        using var stranger = await factory.OwnerClientAsync(other);
 
         var update = await stranger.PutAsJsonAsync($"/api/items/{id}", new { name = "Stolen", category = "Bottom" });
 
@@ -176,7 +176,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         using var anonymous = factory.CreateClient();
         var item = await Json(await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" }));
         var itemId = item.GetProperty("id").GetGuid();
@@ -218,7 +218,7 @@ public sealed class WardrobeApiTests
         using var factory = new ApiFactory();
         var owner = Guid.NewGuid();
         await factory.SeedOwnerAsync(owner);
-        using var client = factory.OwnerClient(owner);
+        using var client = await factory.OwnerClientAsync(owner);
         using var anonymous = factory.CreateClient();
         var id = (await Json(await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })))
             .GetProperty("id").GetGuid();
