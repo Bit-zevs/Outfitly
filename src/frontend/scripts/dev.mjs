@@ -4,7 +4,7 @@ import { extname, isAbsolute, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript' };
+const contentTypes = { '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
 
 createServer(async (request, response) => {
   let pathname;

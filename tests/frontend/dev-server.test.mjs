@@ -15,6 +15,7 @@ test('development server HTTP contract', async (t) => {
   await mkdir(join(root, 'scripts'), { recursive: true });
   await mkdir(join(directory, 'frontend-private'));
   await writeFile(join(root, 'index.html'), '<h1>Wardrobe</h1>');
+  await writeFile(join(root, 'photo.png'), Buffer.from([137, 80, 78, 71]));
   await writeFile(join(directory, 'frontend-private', 'secret.txt'), 'PRIVATE');
   await copyFile(new URL('../../src/frontend/scripts/dev.mjs', import.meta.url), join(root, 'scripts', 'dev.mjs'));
   const server = spawn(process.execPath, [join(root, 'scripts', 'dev.mjs')], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -42,6 +43,11 @@ test('development server HTTP contract', async (t) => {
     const result = await get('/index.html?v=1');
     assert.equal(result.status, 200);
     assert.equal(result.body, '<h1>Wardrobe</h1>');
+  });
+  await t.test('PNG assets have an image content type', async () => {
+    const response = await fetch('http://127.0.0.1:5173/photo.png');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'image/png');
   });
   await t.test('a sibling directory sharing the root prefix is inaccessible', async () => {
     const result = await get('/../frontend-private/secret.txt');
