@@ -100,22 +100,25 @@ export async function outfitEditor(ctx, id) {
     let available = [];
     let currentPage = 1;
     let locked = false;
+    const isSaving = () => form.getAttribute('aria-busy') === 'true';
     function renderSelected() {
       document.querySelector('#selected-count').textContent = `${draft.selected.length} вещей`;
-      document.querySelector('#selected-items').innerHTML = draft.selected.length ? `<div class="selected-grid">${draft.selected.map(item => `<div class="selected-item">${photo(item, '', true)}<button class="remove-item" type="button" data-remove="${escape(item.id)}" aria-label="Убрать ${escape(item.name)}">×</button><p>${escape(item.name)}</p></div>`).join('')}</div>` : '<div class="empty small-empty"><span class="empty-icon">◇</span><h3>Место для ваших сочетаний</h3><p>Добавьте вещи из списка слева.</p></div>';
-      document.querySelectorAll('[data-remove]').forEach(button => { button.onclick = () => { draft.selected = draft.selected.filter(i => i.id !== button.dataset.remove); ctx.setDirty(true); renderSelected(); renderAvailable(); }; });
+      document.querySelector('#selected-items').innerHTML = draft.selected.length ? `<div class="selected-grid">${draft.selected.map(item => `<div class="selected-item">${photo(item, '', true)}<button class="remove-item" type="button" ${isSaving() ? 'disabled' : ''} data-remove="${escape(item.id)}" aria-label="Убрать ${escape(item.name)}">×</button><p>${escape(item.name)}</p></div>`).join('')}</div>` : '<div class="empty small-empty"><span class="empty-icon">◇</span><h3>Место для ваших сочетаний</h3><p>Добавьте вещи из списка слева.</p></div>';
+      document.querySelectorAll('[data-remove]').forEach(button => { button.onclick = () => { if (isSaving()) return; draft.selected = draft.selected.filter(i => i.id !== button.dataset.remove); ctx.setDirty(true); renderSelected(); renderAvailable(); }; });
     }
     function renderAvailable() {
       document.querySelector('#available-items').innerHTML = available.length ? available.map(item => {
         const selected = draft.selected.some(i => i.id === item.id);
-        return `<div class="editor-choice">${photo(item, '', true)}<div><strong>${escape(item.name)}</strong><small>${escape(categories[item.category])}${item.brand ? ` · ${escape(item.brand)}` : ''}</small></div><button class="icon-button" type="button" data-add="${escape(item.id)}" ${selected ? 'disabled' : ''} aria-label="${selected ? 'Уже добавлено:' : 'Добавить'} ${escape(item.name)}">${selected ? '✓' : '+'}</button></div>`;
+        return `<div class="editor-choice">${photo(item, '', true)}<div><strong>${escape(item.name)}</strong><small>${escape(categories[item.category])}${item.brand ? ` · ${escape(item.brand)}` : ''}</small></div><button class="icon-button" type="button" data-add="${escape(item.id)}" ${selected || isSaving() ? 'disabled' : ''} aria-label="${selected ? 'Уже добавлено:' : 'Добавить'} ${escape(item.name)}">${selected ? '✓' : '+'}</button></div>`;
       }).join('') : `<div class="empty small-empty"><p>Вещи не найдены.</p>${link('/items/new', 'Добавить вещь ↗')}</div>`;
       document.querySelectorAll('[data-add]').forEach(button => { button.onclick = () => {
+        if (isSaving()) return;
         if (!draft.selected.some(i => i.id === button.dataset.add)) draft.selected.push(available.find(i => i.id === button.dataset.add));
         ctx.setDirty(true); renderSelected(); renderAvailable();
       }; });
     }
     async function load(page = 1) {
+      if (isSaving()) return;
       const version = ++searchVersion;
       searchController?.abort(); searchController = new AbortController();
       const params = new URLSearchParams({ page: String(page), pageSize: '8', search: document.querySelector('#editor-search').value, category: document.querySelector('#editor-category').value });
@@ -129,6 +132,7 @@ export async function outfitEditor(ctx, id) {
         available = data.items; currentPage = data.page; renderAvailable();
         const nav = document.querySelector('#editor-pagination');
         nav.innerHTML = `${data.page > 1 ? '<button type="button" class="btn outline small" id="prev-items">← Назад</button>' : ''}<span class="muted">Всего: ${data.total}</span>${data.page * data.pageSize < data.total ? '<button type="button" class="btn outline small" id="next-items">Далее →</button>' : ''}`;
+        nav.querySelectorAll('button').forEach(button => { button.disabled = isSaving(); });
         nav.querySelector('#prev-items')?.addEventListener('click', () => load(currentPage - 1));
         nav.querySelector('#next-items')?.addEventListener('click', () => load(currentPage + 1));
       } catch (failure) { if (failure.name !== 'AbortError' && ctx.isCurrent() && version === searchVersion) { catalogError.hidden = false; catalogError.textContent = `${errorMessage(failure)} Нажмите «Найти», чтобы повторить.`; } }
@@ -165,7 +169,7 @@ export async function outfitEditor(ctx, id) {
             } catch (e) { if (ctx.isCurrent()) showError(error, e); }
           };
         }
-      } finally { if (ctx.isCurrent()) { busy(form, false); saveButton.disabled = locked; ctx.setSaving(false); } }
+      } finally { if (ctx.isCurrent()) { busy(form, false); renderSelected(); renderAvailable(); saveButton.disabled = locked; ctx.setSaving(false); } }
     };
   } };
 }

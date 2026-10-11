@@ -8,5 +8,8 @@
     "build": "node scripts/build.mjs",
     "prepare:api": "node scripts/prepare-api.mjs",
     "test": "node --test ../../tests/frontend/*.test.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
   }
 }
