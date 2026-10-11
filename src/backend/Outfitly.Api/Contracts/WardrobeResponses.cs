@@ -22,11 +22,16 @@ public static class WardrobeResponses
         page.Total, page.Page, page.PageSize
     };
 
-    public static string? ExternalPhotoInput(string? url, Guid id, ItemView? current = null)
+    public static string? ExternalPhotoInput(string? url, Guid id, HttpRequest request, ItemView? current = null)
     {
-        if (url == $"/api/items/{id}/photo" && current?.HasUploadedPhoto == true) return null;
-        if (url is not null && (url.StartsWith('/') ||
-            (Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.AbsolutePath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))))
+        var candidate = url?.Trim();
+        if (candidate == $"/api/items/{id}/photo" && current?.HasUploadedPhoto == true) return null;
+        var origin = new Uri($"{request.Scheme}://{request.Host}");
+        var isInternal = Uri.TryCreate(candidate, UriKind.Absolute, out var uri) &&
+            uri.Scheme.Equals(origin.Scheme, StringComparison.OrdinalIgnoreCase) &&
+            uri.IdnHost.Equals(origin.IdnHost, StringComparison.OrdinalIgnoreCase) && uri.Port == origin.Port &&
+            uri.AbsolutePath.StartsWith($"{request.PathBase}/api/", StringComparison.OrdinalIgnoreCase);
+        if (candidate is not null && (candidate.StartsWith('/') || isInternal))
             throw new ArgumentException("Use the upload endpoint to assign an internal photo.");
         return url;
     }

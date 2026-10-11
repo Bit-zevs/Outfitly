@@ -8,6 +8,7 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor
 {
     public ProcessedPhoto Process(byte[] content, string contentType)
     {
+        contentType = contentType.ToLowerInvariant();
         if (contentType is not ("image/jpeg" or "image/png")) throw new UnsupportedPhotoException();
         using var data = SKData.CreateCopy(content);
         using var codec = SKCodec.Create(data);

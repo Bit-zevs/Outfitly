@@ -37,6 +37,69 @@ public sealed class PhotoApiTests
         (await (await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" }))
             .Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
 
+    [Theory]
+    [InlineData("https://images.example.com/api/photos/42")]
+    [InlineData("https://localhost.example.com/api/photos/42")]
+    [InlineData("https://localhost:8443/api/photos/42")]
+    [InlineData("http://localhost/api/photos/42")]
+    public async Task External_api_photo_urls_can_be_created_and_submitted_back_on_update(string photoUrl)
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner);
+        var created = await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top", photoUrl });
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var body = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var id = body.GetProperty("id").GetGuid();
+        Assert.Equal(photoUrl, body.GetProperty("photoUrl").GetString());
+        var updated = await client.PutAsJsonAsync($"/api/items/{id}", new { name = "Renamed", category = "Top", photoUrl });
+        Assert.Equal(HttpStatusCode.NoContent, updated.StatusCode);
+        var saved = await client.GetFromJsonAsync<JsonElement>($"/api/items/{id}");
+        Assert.Equal("Renamed", saved.GetProperty("name").GetString());
+        Assert.Equal(photoUrl, saved.GetProperty("photoUrl").GetString());
+    }
+
+    [Theory]
+    [InlineData("https://localhost/api/photos/42")]
+    [InlineData("https://LOCALHOST:443/api/photos/42")]
+    [InlineData("  https://localhost/api/photos/42  ")]
+    public async Task Same_origin_api_urls_cannot_be_assigned_as_external_photos(string photoUrl)
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner);
+        var id = await CreateItem(client);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/items", new { name = "Invalid", category = "Top", photoUrl })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PutAsJsonAsync($"/api/items/{id}", new { name = "Invalid", category = "Top", photoUrl })).StatusCode);
+        var saved = await client.GetFromJsonAsync<JsonElement>($"/api/items/{id}");
+        Assert.Equal("Shirt", saved.GetProperty("name").GetString());
+        Assert.Equal(JsonValueKind.Null, saved.GetProperty("photoUrl").ValueKind);
+    }
+
+    [Theory]
+    [InlineData("IMAGE/PNG", SKEncodedImageFormat.Png, "image/png")]
+    [InlineData("Image/PnG", SKEncodedImageFormat.Png, "image/png")]
+    [InlineData("IMAGE/JPEG", SKEncodedImageFormat.Jpeg, "image/jpeg")]
+    [InlineData("Image/JpEg", SKEncodedImageFormat.Jpeg, "image/jpeg")]
+    public async Task Upload_accepts_case_insensitive_MIME_and_preserves_the_detected_format(string mime,
+        SKEncodedImageFormat format, string expectedType)
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner);
+        var id = await CreateItem(client);
+        Assert.Equal(HttpStatusCode.OK, (await Upload(client, id, Image(format), mime)).StatusCode);
+        var photo = await client.GetAsync($"/api/items/{id}/photo");
+        Assert.Equal(HttpStatusCode.OK, photo.StatusCode);
+        Assert.Equal(expectedType, photo.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await Upload(client, id, Image(format == SKEncodedImageFormat.Png
+            ? SKEncodedImageFormat.Jpeg : SKEncodedImageFormat.Png), mime)).StatusCode);
+        Assert.Equal(expectedType, (await client.GetAsync($"/api/items/{id}/photo")).Content.Headers.ContentType?.MediaType);
+    }
+
     [Fact]
     public async Task Upload_replace_edit_external_url_and_delete_preserve_saved_state_and_clean_files()
     {

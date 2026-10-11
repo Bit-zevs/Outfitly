@@ -24,17 +24,17 @@ public static class WardrobeEndpoints
             await catalog.GetMyItemsAsync(CurrentActor.Id(context.User), CatalogRequest.Parse(context.Request.Query), context.RequestAborted), true));
         items.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             WardrobeResponses.Item(service.GetItem(CurrentActor.Id(user), id), $"/api/items/{id}/photo"));
-        items.MapPost("/", (ItemRequest request, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
         {
             var actor = CurrentActor.Id(user);
             var item = service.CreateItem(actor, request.Name, request.Category, request.Color,
-                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty));
+                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty, httpRequest));
             return Results.Created($"/api/items/{item.Id}", WardrobeResponses.Item(service.GetItem(actor, item.Id), $"/api/items/{item.Id}/photo"));
         }).AddEndpointFilter<CommitChangesFilter>();
-        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
         {
             var actor = CurrentActor.Id(user);
-            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, service.GetItem(actor, id));
+            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, httpRequest, service.GetItem(actor, id));
             service.UpdateItem(actor, id, request.Name, request.Category, request.Color,
                 request.Size, request.Brand, request.Description, photoUrl);
             return Results.NoContent();
