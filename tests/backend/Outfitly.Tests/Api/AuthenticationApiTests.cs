@@ -86,6 +86,11 @@ public sealed class AuthenticationApiTests
         Assert.Contains("httponly", header, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", header, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("expires=", header, StringComparison.OrdinalIgnoreCase);
+        var authOptions = factory.Services.GetRequiredService<IOptionsMonitor<CookieAuthenticationOptions>>()
+            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        var authCookie = header.Split(';')[0];
+        var ticket = authOptions.TicketDataFormat.Unprotect(authCookie[(authCookie.IndexOf('=') + 1)..])!;
+        Assert.Equal(TimeSpan.FromHours(8), ticket.Properties.ExpiresUtc - ticket.Properties.IssuedUtc);
         using var secondBrowser = factory.CreateClient();
         (await Login(secondBrowser, "alice@example.com")).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(browser);
@@ -212,6 +217,48 @@ public sealed class AuthenticationApiTests
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
         Assert.Empty(await db.Users.ToListAsync());
         Assert.Empty(await db.Accounts.ToListAsync());
+    }
+
+    [Fact]
+    public async Task Registration_accepts_the_email_length_limit_and_rejects_one_character_over()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var client = factory.CreateClient();
+        var maximumEmail = $"{new string('a', 64)}@{new string('b', 63)}.{new string('c', 63)}.{new string('d', 61)}";
+        Assert.Equal(254, maximumEmail.Length);
+        var tooLongEmail = maximumEmail + "e";
+        Assert.Equal(255, tooLongEmail.Length);
+
+        Assert.Equal(HttpStatusCode.Created, (await Register(client, maximumEmail)).StatusCode);
+        var rejected = await Register(client, tooLongEmail);
+        Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var accounts = await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Accounts.ToListAsync();
+        Assert.Equal(maximumEmail, Assert.Single(accounts).Email);
+    }
+
+    [Fact]
+    public async Task A_user_from_before_authentication_cannot_log_in_without_credentials()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            db.Users.Add(new User(Guid.NewGuid(), "Legacy user"));
+            await db.SaveChangesAsync();
+        }
+        using var client = factory.CreateClient();
+
+        var response = await Login(client, "legacy@example.com");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(HasAuthCookie(response));
+        using var read = factory.Services.CreateScope();
+        var persisted = read.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+        Assert.Equal("Legacy user", (await persisted.Users.SingleAsync()).DisplayName);
+        Assert.Empty(await persisted.Accounts.ToListAsync());
     }
 
     [Fact]
