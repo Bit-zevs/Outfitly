@@ -34,6 +34,30 @@ GET /health проверяет HTTP-приложение, а не доступн
 Личные операции доступны после регистрации и входа по [контракту API](../src/backend/Outfitly.Api/README.md).
 Публичные списки и ссылки требуют доступной БД с миграциями.
 
+### Локальная БД в Docker и User Secrets
+
+Локальный контейнер `outfitly-postgres` использует PostgreSQL 17, порт
+`127.0.0.1:5433` и постоянный volume `outfitly-postgres-data`. База и пользователь
+называются `outfitly`. Данные сохраняются после остановки контейнера; не удаляйте
+volume, если хотите сохранить гардероб. Для запуска существующего контейнера:
+
+```powershell
+docker start outfitly-postgres
+```
+
+API имеет `UserSecretsId` и в режиме Development автоматически читает локальную
+строку подключения из .NET User Secrets. При ручной настройке замените
+`<local-password>` своим паролем; настоящее значение не включайте в Git:
+
+```powershell
+dotnet user-secrets set "ConnectionStrings:Outfitly" "Host=127.0.0.1;Port=5433;Database=outfitly;Username=outfitly;Password=<local-password>" --project src/backend/Outfitly.Api
+```
+
+После настройки обычная команда `dotnet run --project src/backend/Outfitly.Api
+--launch-profile https` не требует переменной окружения со строкой подключения.
+Для EF tools по-прежнему отдельно задаётся `OUTFITLY_CONNECTION_STRING`, для
+тестов — строка к отдельной БД в `OUTFITLY_TEST_CONNECTION_STRING`.
+
 Профиль запуска использует `https://localhost:7043`; `http://localhost:5043`
 перенаправляет на HTTPS. Cookie и CSRF требуют HTTPS также при ручной проверке API.
 Сначала GET `/api/auth/csrf`, затем POST регистрации/входа с cookie и заголовком
@@ -79,7 +103,8 @@ npm run build
 npm test
 ```
 
-Dev запускает сервер, build создаёт dist, test проверяет HTTP-границу dev server.
+Dev запускает сервер, build создаёт dist вместе с изображениями, test проверяет
+HTTP-границу dev server, API-клиент, авторизацию, маршруты и сохранение форм.
 Для тестов порт 5173 должен быть свободен; предварительно остановите dev server.
 
 ### Frontend и API на одном HTTPS origin
@@ -93,10 +118,12 @@ dotnet run --project src/backend/Outfitly.Api --launch-profile https
 
 Откройте `https://localhost:7043/`. Команда подготовки сначала собирает `dist`, затем
 копирует только собранные файлы в игнорируемый `Outfitly.Api/wwwroot`. После изменения
-frontend повторите подготовку. Сервер на 5173 остаётся для просмотра отдельного каркаса;
+frontend повторите подготовку. Сервер на 5173 остаётся для просмотра оформления без API;
 интеграционный сценарий использует 7043 и относительные `/api/...`, без CORS.
-Пользовательские формы пока не подключены; запросы можно проверять вручную по
-[контракту API](../src/backend/Outfitly.Api/README.md).
+Пользовательские формы подключены к API. Для полноценной работы откройте сайт на
+7043 с настроенной PostgreSQL. Маршруты страниц используют hash (`/#/wardrobe`),
+поэтому обновление страницы и прямые ссылки не требуют серверного fallback.
+Подробнее об интерфейсе и проверках — [frontend](../src/frontend/README.md).
 
 Перед `dotnet publish src/backend/Outfitly.Api` также выполните подготовку frontend.
 Без `wwwroot/index.html` publish завершится с явной ошибкой. Подготовленные файлы
@@ -118,7 +145,7 @@ frontend повторите подготовку. Сервер на 5173 ост�
 Проверка `Backend` собирает Release с SDK из global.json и запускает весь набор
 тестов, включая миграции и ограничения настоящего PostgreSQL 17. База создаётся
 на время job; строка подключения задана явно, поэтому PostgreSQL-тесты не пропускаются.
-Проверка `Frontend` на Node.js 24 выполняет сборку и HTTP-тесты dev server.
+Проверка `Frontend` на Node.js 24 выполняет сборку и frontend-тесты.
 Frontend пока не имеет сторонних зависимостей, поэтому npm install не требуется.
 Backend job также подготавливает frontend и проверяет publish API вместе с ним.
 
