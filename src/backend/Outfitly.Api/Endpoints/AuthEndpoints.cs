@@ -43,6 +43,7 @@ public static class AuthEndpoints
                 new ClaimsPrincipal(identity), new AuthenticationProperties
                 {
                     IsPersistent = false, AllowRefresh = false,
+                    IssuedUtc = new DateTimeOffset(result.Session.ExpiresAtUtc).AddHours(-8),
                     ExpiresUtc = new DateTimeOffset(result.Session.ExpiresAtUtc)
                 });
             return Results.Ok(result.User);
