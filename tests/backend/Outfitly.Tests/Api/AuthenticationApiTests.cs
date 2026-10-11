@@ -101,6 +101,34 @@ public sealed class AuthenticationApiTests
         Assert.Equal(HttpStatusCode.OK, (await secondBrowser.GetAsync("/api/auth/me")).StatusCode);
     }
 
+    [Fact]
+    public async Task Switching_accounts_revokes_the_old_session_and_requires_a_new_csrf_token()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var browser = factory.CreateClient();
+        using var other = factory.CreateClient();
+        (await Register(browser, "alice@example.com")).EnsureSuccessStatusCode();
+        (await Register(other, "bob@example.com")).EnsureSuccessStatusCode();
+        var aliceLogin = await Login(browser, "alice@example.com");
+        var aliceCookie = AuthCookieHeader(aliceLogin);
+        await ApiFactory.SetCsrfAsync(browser);
+
+        var switched = await browser.PostAsJsonAsync("/api/auth/login",
+            new { email = "bob@example.com", password = Password });
+
+        Assert.Equal(HttpStatusCode.OK, switched.StatusCode);
+        var bob = await switched.Content.ReadFromJsonAsync<AccountView>();
+        Assert.Equal("bob@example.com", bob?.Email);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await browser.PostAsJsonAsync("/api/outfits", new { name = "Stale CSRF" })).StatusCode);
+        await ApiFactory.SetCsrfAsync(browser);
+        Assert.Equal(HttpStatusCode.Created,
+            (await browser.PostAsJsonAsync("/api/outfits", new { name = "Bob's outfit" })).StatusCode);
+        using var replay = ReplayClient(factory, aliceCookie.Split(';')[0]);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/auth/me")).StatusCode);
+    }
+
     [Theory]
     [InlineData("/api/auth/register")]
     [InlineData("/api/auth/login")]
