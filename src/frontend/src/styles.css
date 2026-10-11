@@ -510,6 +510,12 @@ strong {
   object-fit: cover;
 }
 
+.field-error {
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: -12px 0 20px;
+}
 
 .auth-art:after {
   content: '';

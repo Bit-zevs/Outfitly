@@ -1,3 +1,9 @@
+import { ApiError } from './api.js';
+
+export function passwordConfirmationError(password, confirmation) {
+  return password && password === confirmation ? '' : 'Пароли не совпадают.';
+}
+
 export function createAuth(api) {
   let user = null;
   return {
@@ -13,7 +19,9 @@ export function createAuth(api) {
       api.resetCsrf();
       return user;
     },
-    async register(displayName, email, password) {
+    async register(displayName, email, password, confirmation) {
+      const mismatch = passwordConfirmationError(password, confirmation);
+      if (mismatch) throw new ApiError(400, { detail: mismatch });
       return api.request('/auth/register', { method: 'POST', body: { displayName, email, password }, anonymous: true });
     },
     async logout() {

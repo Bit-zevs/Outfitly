@@ -1,4 +1,5 @@
 import { ApiError } from './api.js';
+import { passwordConfirmationError } from './auth.js';
 import { badge, categories, collage, crumbs, empty, escape, field, filters, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
 import { catalogQuery, changedFilter, safeReturn, shareAddress } from './router.js';
 import { busy, confirmAction, modal, showError } from './ui.js';
@@ -10,19 +11,36 @@ export function home(ctx) {
 export function authPage(ctx, register) {
   const { route } = ctx;
   const returnTo = route.query.get('return');
-  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><p class="eyebrow">${register ? 'Начните с Outfitly' : 'Добро пожаловать'}</p><h1>${register ? 'Создать аккаунт' : 'С возвращением'}</h1><p class="lead">${register ? 'Пространство для ваших вещей и образов.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: register ? 'new-password' : 'current-password', min: register ? 15 : '', max: 128, hint: register ? 'От 15 до 128 символов. Можно использовать пробелы.' : '' })}<label class="check-label"><input type="checkbox" id="show-password">Показать пароль</label><p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт ↗' : 'Войти ↗'}</button></form><p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
+  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><p class="eyebrow">${register ? 'Начните с Outfitly' : 'Добро пожаловать'}</p><h1>${register ? 'Создать аккаунт' : 'С возвращением'}</h1><p class="lead">${register ? 'Пространство для ваших вещей и образов.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: register ? 'new-password' : 'current-password', min: register ? 8 : '', max: 128, hint: register ? 'От 8 до 128 символов. Можно использовать пробелы.' : '' })}${register ? `${field('Повторите пароль', 'passwordConfirmation', '', { type: 'password', required: true, autocomplete: 'new-password', max: 128 })}<p id="password-match-error" class="field-error" role="status" hidden></p>` : ''}<label class="check-label"><input type="checkbox" id="show-password">${register ? 'Показать пароли' : 'Показать пароль'}</label><p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт ↗' : 'Войти ↗'}</button></form><p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
     const form = document.querySelector('#auth-form');
-    document.querySelector('#show-password').onchange = event => { form.elements.password.type = event.target.checked ? 'text' : 'password'; };
+    if (register) form.elements.passwordConfirmation.setAttribute('aria-describedby', 'password-match-error');
+    document.querySelector('#show-password').onchange = event => {
+      const type = event.target.checked ? 'text' : 'password';
+      form.elements.password.type = type;
+      if (register) form.elements.passwordConfirmation.type = type;
+    };
+    function validateConfirmation(show = false) {
+      if (!register) return true;
+      const confirmation = form.elements.passwordConfirmation;
+      const message = passwordConfirmationError(form.elements.password.value, confirmation.value);
+      confirmation.setCustomValidity(message);
+      confirmation.setAttribute('aria-invalid', String(Boolean(message && (show || confirmation.value))));
+      const notice = document.querySelector('#password-match-error');
+      notice.hidden = !message || (!show && !confirmation.value);
+      notice.textContent = message;
+      return !message;
+    }
     form.onsubmit = async event => {
       event.preventDefault();
       if (form.getAttribute('aria-busy') === 'true') return;
       const values = Object.fromEntries(new FormData(form));
       if (register && !values.displayName.trim()) { form.elements.displayName.setCustomValidity('Введите имя.'); form.elements.displayName.reportValidity(); return; }
+      if (!validateConfirmation(true)) { form.elements.passwordConfirmation.reportValidity(); return; }
       busy(form, true);
       document.querySelector('#form-error').hidden = true;
       try {
         if (register) {
-          await ctx.auth.register(values.displayName, values.email, values.password);
+          await ctx.auth.register(values.displayName, values.email, values.password, values.passwordConfirmation);
           if (!ctx.isCurrent()) return;
           ctx.toast('Аккаунт создан. Войдите с вашим паролем.');
           ctx.navigate(`/login?email=${encodeURIComponent(values.email)}${returnTo ? `&return=${encodeURIComponent(returnTo)}` : ''}`);
@@ -37,7 +55,11 @@ export function authPage(ctx, register) {
         else showError(document.querySelector('#form-error'), error);
       } finally { busy(form, false); }
     };
-    form.oninput = () => { if (register) form.elements.displayName.setCustomValidity(''); };
+    form.oninput = event => {
+      if (!register) return;
+      form.elements.displayName.setCustomValidity('');
+      if (['password', 'passwordConfirmation'].includes(event.target.name)) validateConfirmation();
+    };
   } };
 }
 
