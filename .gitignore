@@ -49,6 +49,8 @@ node_modules/
 .next/
 .nuxt/
 dist/
+src/backend/Outfitly.Api/wwwroot/
+App_Data/
 build/
 *.tsbuildinfo
 

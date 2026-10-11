@@ -11,6 +11,7 @@ public sealed class WardrobeItem
     public string? Brand { get; private set; }
     public string? Description { get; private set; }
     public string? PhotoUrl { get; private set; }
+    public string? PhotoStorageKey { get; private set; }
     public bool IsPublic { get; private set; }
 
     public WardrobeItem(Guid id, Guid ownerId, string name, ClothingCategory category,
@@ -37,6 +38,20 @@ public sealed class WardrobeItem
         Brand = Guard.Optional(brand);
         Description = Guard.Optional(description);
         PhotoUrl = validPhotoUrl;
+        if (validPhotoUrl is not null) PhotoStorageKey = null;
+    }
+
+    public void SetUploadedPhoto(string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        PhotoStorageKey = key;
+        PhotoUrl = null;
+    }
+
+    public void RemovePhoto()
+    {
+        PhotoStorageKey = null;
+        PhotoUrl = null;
     }
 
     public void Publish() => IsPublic = true;

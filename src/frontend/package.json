@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
+    "prepare:api": "node scripts/prepare-api.mjs",
     "test": "node --test ../../tests/frontend/dev-server.test.mjs"
   }
 }

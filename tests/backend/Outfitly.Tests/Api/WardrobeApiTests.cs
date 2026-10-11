@@ -123,7 +123,7 @@ public sealed class WardrobeApiTests
         Assert.Equal("Shoes", reloaded.GetProperty("name").GetString());
         Assert.Equal("Footwear", reloaded.GetProperty("category").GetString());
         Assert.Equal(JsonValueKind.Null, reloaded.GetProperty("color").ValueKind);
-        Assert.Single((await Json(await client.GetAsync("/api/items"))).EnumerateArray());
+        Assert.Single((await Json(await client.GetAsync("/api/items"))).GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/items/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/items/{id}")).StatusCode);
     }
@@ -146,7 +146,7 @@ public sealed class WardrobeApiTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        Assert.Empty((await Json(await client.GetAsync("/api/items"))).EnumerateArray());
+        Assert.Empty((await Json(await client.GetAsync("/api/items"))).GetProperty("items").EnumerateArray());
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public sealed class WardrobeApiTests
 
         Assert.Equal(HttpStatusCode.Forbidden, update.StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync($"/api/items/{id}")).StatusCode);
-        Assert.Empty((await Json(await stranger.GetAsync("/api/items"))).EnumerateArray());
+        Assert.Empty((await Json(await stranger.GetAsync("/api/items"))).GetProperty("items").EnumerateArray());
         Assert.Equal("Shirt", (await Json(await client.GetAsync($"/api/items/{id}"))).GetProperty("name").GetString());
     }
 
@@ -198,7 +198,7 @@ public sealed class WardrobeApiTests
         var shared = await Json(await anonymous.GetAsync(link.Url));
         Assert.Equal("Updated outfit", shared.GetProperty("name").GetString());
         Assert.Equal(itemId, Assert.Single(shared.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
-        Assert.Empty((await Json(await anonymous.GetAsync("/api/wardrobe"))).EnumerateArray());
+        Assert.Empty((await Json(await anonymous.GetAsync("/api/wardrobe"))).GetProperty("items").EnumerateArray());
         Assert.Single((await Json(await anonymous.GetAsync("/api/wardrobe/outfits"))).EnumerateArray());
         Assert.DoesNotContain("token", shared.GetRawText(), StringComparison.OrdinalIgnoreCase);
 
@@ -233,7 +233,7 @@ public sealed class WardrobeApiTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(first.Url)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await anonymous.GetAsync(second.Url)).StatusCode);
-        Assert.Single((await Json(await anonymous.GetAsync("/api/wardrobe"))).EnumerateArray());
+        Assert.Single((await Json(await anonymous.GetAsync("/api/wardrobe"))).GetProperty("items").EnumerateArray());
     }
 
     private static async Task<JsonElement> Json(HttpResponseMessage response)

@@ -69,7 +69,7 @@ public sealed class AuthenticationApiTests
         var route = $"/api/items/{item.GetProperty("id").GetGuid()}";
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.GetAsync(route)).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await bob.DeleteAsync(route)).StatusCode);
-        Assert.Empty((await bob.GetFromJsonAsync<JsonElement>("/api/items")).EnumerateArray());
+        Assert.Empty((await bob.GetFromJsonAsync<JsonElement>("/api/items")).GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.OK, (await alice.GetAsync(route)).StatusCode);
     }
 

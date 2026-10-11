@@ -10,28 +10,33 @@ public static class WardrobeEndpoints
 {
     public static void MapWardrobeEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/wardrobe", (WardrobeService service) => service.GetPublicItems());
-        app.MapGet("/api/wardrobe/outfits", (WardrobeService service) => service.GetPublicOutfits());
+        app.MapGet("/api/wardrobe", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
+            await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query), context.RequestAborted), false));
+        app.MapGet("/api/wardrobe/outfits", (WardrobeService service) => service.GetPublicOutfits()
+            .Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/wardrobe/outfits/{outfit.Id}/items/{id}/photo")));
         app.MapGet("/api/shared/items/{token}", (string token, WardrobeService service) =>
-            service.GetSharedItem(token) is { } item ? Results.Ok(item) : Results.NotFound());
+            service.GetSharedItem(token) is { } item ? Results.Ok(WardrobeResponses.Item(item, $"/api/shared/items/{token}/photo")) : Results.NotFound());
         app.MapGet("/api/shared/outfits/{token}", (string token, WardrobeService service) =>
-            service.GetSharedOutfit(token) is { } outfit ? Results.Ok(outfit) : Results.NotFound());
+            service.GetSharedOutfit(token) is { } outfit ? Results.Ok(WardrobeResponses.Outfit(outfit, id => $"/api/shared/outfits/{token}/items/{id}/photo")) : Results.NotFound());
 
         var items = app.MapGroup("/api/items").RequireAuthorization(CurrentActor.PolicyName);
-        items.MapGet("/", (ClaimsPrincipal user, WardrobeService service) => service.GetMyItems(CurrentActor.Id(user)));
+        items.MapGet("/", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
+            await catalog.GetMyItemsAsync(CurrentActor.Id(context.User), CatalogRequest.Parse(context.Request.Query), context.RequestAborted), true));
         items.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
-            service.GetItem(CurrentActor.Id(user), id));
+            WardrobeResponses.Item(service.GetItem(CurrentActor.Id(user), id), $"/api/items/{id}/photo"));
         items.MapPost("/", (ItemRequest request, ClaimsPrincipal user, WardrobeService service) =>
         {
             var actor = CurrentActor.Id(user);
             var item = service.CreateItem(actor, request.Name, request.Category, request.Color,
-                request.Size, request.Brand, request.Description, request.PhotoUrl);
-            return Results.Created($"/api/items/{item.Id}", service.GetItem(actor, item.Id));
+                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty));
+            return Results.Created($"/api/items/{item.Id}", WardrobeResponses.Item(service.GetItem(actor, item.Id), $"/api/items/{item.Id}/photo"));
         }).AddEndpointFilter<CommitChangesFilter>();
         items.MapPut("/{id:guid}", (Guid id, ItemRequest request, ClaimsPrincipal user, WardrobeService service) =>
         {
-            service.UpdateItem(CurrentActor.Id(user), id, request.Name, request.Category, request.Color,
-                request.Size, request.Brand, request.Description, request.PhotoUrl);
+            var actor = CurrentActor.Id(user);
+            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, service.GetItem(actor, id));
+            service.UpdateItem(actor, id, request.Name, request.Category, request.Color,
+                request.Size, request.Brand, request.Description, photoUrl);
             return Results.NoContent();
         }).AddEndpointFilter<CommitChangesFilter>();
         items.MapDelete("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
@@ -47,16 +52,20 @@ public static class WardrobeEndpoints
         items.MapPost("/{id:guid}/share-links", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             CreateLink(CurrentActor.Id(user), ShareTargetType.WardrobeItem, id, service))
             .AddEndpointFilter<CommitChangesFilter>();
+        items.MapGet("/{id:guid}/share-links", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
+            service.GetShareLinks(CurrentActor.Id(user), ShareTargetType.WardrobeItem, id)
+                .Select(link => new ShareLinkResponse(link.Id, link.Token, $"/api/shared/items/{link.Token}")));
 
         var outfits = app.MapGroup("/api/outfits").RequireAuthorization(CurrentActor.PolicyName);
-        outfits.MapGet("/", (ClaimsPrincipal user, WardrobeService service) => service.GetMyOutfits(CurrentActor.Id(user)));
+        outfits.MapGet("/", (ClaimsPrincipal user, WardrobeService service) => service.GetMyOutfits(CurrentActor.Id(user))
+            .Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/items/{id}/photo")));
         outfits.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
-            service.GetOutfit(CurrentActor.Id(user), id));
+            WardrobeResponses.Outfit(service.GetOutfit(CurrentActor.Id(user), id), itemId => $"/api/items/{itemId}/photo"));
         outfits.MapPost("/", (OutfitRequest request, ClaimsPrincipal user, WardrobeService service) =>
         {
             var actor = CurrentActor.Id(user);
             var outfit = service.CreateOutfit(actor, request.Name, request.Description);
-            return Results.Created($"/api/outfits/{outfit.Id}", service.GetOutfit(actor, outfit.Id));
+            return Results.Created($"/api/outfits/{outfit.Id}", WardrobeResponses.Outfit(service.GetOutfit(actor, outfit.Id), id => $"/api/items/{id}/photo"));
         }).AddEndpointFilter<CommitChangesFilter>();
         outfits.MapPut("/{id:guid}", (Guid id, OutfitRequest request, ClaimsPrincipal user, WardrobeService service) =>
         {
@@ -86,6 +95,9 @@ public static class WardrobeEndpoints
         outfits.MapPost("/{id:guid}/share-links", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             CreateLink(CurrentActor.Id(user), ShareTargetType.Outfit, id, service))
             .AddEndpointFilter<CommitChangesFilter>();
+        outfits.MapGet("/{id:guid}/share-links", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
+            service.GetShareLinks(CurrentActor.Id(user), ShareTargetType.Outfit, id)
+                .Select(link => new ShareLinkResponse(link.Id, link.Token, $"/api/shared/outfits/{link.Token}")));
         app.MapDelete("/api/share-links/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
         {
             service.DeactivateShareLink(CurrentActor.Id(user), id);

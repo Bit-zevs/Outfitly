@@ -191,6 +191,10 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PhotoStorageKey")
+                        .IsConcurrencyToken()
+                        .HasColumnType("text");
+
                     b.Property<string>("PhotoUrl")
                         .HasColumnType("text");
 

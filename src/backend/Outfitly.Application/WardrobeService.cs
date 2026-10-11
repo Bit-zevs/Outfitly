@@ -4,7 +4,7 @@ namespace Outfitly.Application;
 
 // actorId must come from the authenticated user, never from a client-supplied owner field.
 // The caller commits each completed command once through IUnitOfWork.
-public sealed class WardrobeService(IWardrobeRepository repository)
+public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges? photos = null)
 {
     public WardrobeItem CreateItem(Guid actorId, string name, ClothingCategory category,
         string? color = null, string? size = null, string? brand = null,
@@ -29,7 +29,9 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     {
         var item = Item(itemId);
         RequireOwner(actorId, item.OwnerId);
+        var oldPhoto = item.PhotoStorageKey;
         item.Update(name, category, color, size, brand, description, photoUrl);
+        if (oldPhoto != item.PhotoStorageKey) photos?.RemoveAfterCommit(oldPhoto);
     }
 
     public void UpdateOutfit(Guid actorId, Guid outfitId, string name, string? description = null)
@@ -104,6 +106,7 @@ public sealed class WardrobeService(IWardrobeRepository repository)
     {
         var item = Item(itemId);
         RequireOwner(actorId, item.OwnerId);
+        photos?.RemoveAfterCommit(item.PhotoStorageKey);
         foreach (var outfit in repository.GetOutfits().Where(outfit => outfit.ItemIds.Contains(itemId)))
         {
             outfit.RemoveItem(itemId);
@@ -214,7 +217,44 @@ public sealed class WardrobeService(IWardrobeRepository repository)
 
     private static ItemView View(WardrobeItem item) =>
         new(item.Id, item.OwnerId, item.Name, item.Category, item.Color, item.Size,
-            item.Brand, item.Description, item.PhotoUrl, item.IsPublic);
+            item.Brand, item.Description, item.PhotoUrl, item.IsPublic, item.PhotoStorageKey is not null);
+
+    internal WardrobeItem OwnedItem(Guid actorId, Guid itemId)
+    {
+        var item = Item(itemId);
+        RequireOwner(actorId, item.OwnerId);
+        return item;
+    }
+
+    public IReadOnlyCollection<ShareLinkView> GetShareLinks(Guid actorId, ShareTargetType type, Guid id)
+    {
+        RequireTargetOwner(actorId, type, id);
+        return repository.GetLinks().Where(link => link.IsActive && link.TargetType == type && link.TargetId == id)
+            .OrderBy(link => link.Id).Select(link => new ShareLinkView(link.Id, link.Token)).ToArray();
+    }
+
+    public string? GetOwnedPhoto(Guid actorId, Guid id) => OwnedItem(actorId, id).PhotoStorageKey;
+
+    public string? GetPublicPhoto(Guid id) =>
+        repository.GetAll().SingleOrDefault(item => item.Id == id && item.IsPublic)?.PhotoStorageKey;
+
+    public string? GetPublicOutfitPhoto(Guid outfitId, Guid itemId)
+    {
+        var outfit = repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == outfitId && outfit.IsPublic);
+        return outfit?.ItemIds.Contains(itemId) == true ? Item(itemId).PhotoStorageKey : null;
+    }
+
+    public string? GetSharedPhoto(string token, Guid? itemId = null)
+    {
+        if (itemId is null)
+        {
+            var link = ActiveLink(token, ShareTargetType.WardrobeItem);
+            return link is null ? null : repository.GetAll().SingleOrDefault(item => item.Id == link.TargetId)?.PhotoStorageKey;
+        }
+        var outfitLink = ActiveLink(token, ShareTargetType.Outfit);
+        var outfit = outfitLink is null ? null : repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == outfitLink.TargetId);
+        return outfit?.ItemIds.Contains(itemId.Value) == true ? Item(itemId.Value).PhotoStorageKey : null;
+    }
 
     private OutfitView View(Outfit outfit) => Views([outfit]).Single();
 
