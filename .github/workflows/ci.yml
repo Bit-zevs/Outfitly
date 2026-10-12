@@ -73,6 +73,8 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
+      - name: Install test dependencies
+        run: npm ci
       - name: Build
         run: npm run build
       - name: Test

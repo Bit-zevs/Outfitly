@@ -38,8 +38,8 @@ public sealed class AccountPersistenceTests
     }
 
     [Theory]
-    [InlineData(14, false)]
-    [InlineData(15, true)]
+    [InlineData(7, false)]
+    [InlineData(8, true)]
     [InlineData(128, true)]
     [InlineData(129, false)]
     public async Task Password_length_boundaries_are_enforced(int length, bool accepted)

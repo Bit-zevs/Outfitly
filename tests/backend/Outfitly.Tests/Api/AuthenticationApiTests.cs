@@ -230,8 +230,29 @@ public sealed class AuthenticationApiTests
     }
 
     [Theory]
+    [InlineData(8)]
+    [InlineData(14)]
+    [InlineData(128)]
+    public async Task Registration_accepts_passwords_from_eight_characters_and_allows_login(int length)
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var client = factory.CreateClient();
+        var password = new string('x', length);
+        await ApiFactory.SetCsrfAsync(client);
+        var registration = await client.PostAsJsonAsync("/api/auth/register",
+            new { email = "short@example.com", password, displayName = "Alice" });
+        Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
+        var login = await Login(client, "short@example.com", password);
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.True(HasAuthCookie(login));
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/auth/me")).StatusCode);
+    }
+
+    [Theory]
     [InlineData("invalid", "long enough password", "Alice")]
-    [InlineData("alice@example.com", "too short", "Alice")]
+    [InlineData("alice@example.com", "1234567", "Alice")]
+    [InlineData("alice@example.com", "", "Alice")]
     [InlineData("alice@example.com", "long enough password", "  ")]
     public async Task Invalid_registration_does_not_create_partial_data(string email, string password, string name)
     {

@@ -3,16 +3,19 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outfitly</title>
+    <meta name="theme-color" content="#fbf9f5">
+    <meta name="description" content="Outfitly — личный гардероб, ваши вещи и любимые образы в одном месте.">
+    <title>Outfitly — ваш личный гардероб</title>
     <link rel="stylesheet" href="./src/styles.css">
   </head>
   <body>
-    <main class="page">
-      <p class="eyebrow">Личный гардероб</p>
-      <h1>Outfitly</h1>
-      <p>Здесь появятся ваши вещи и готовые образы.</p>
-      <button id="add-item" type="button">Добавить вещь</button>
-    </main>
+    <a class="skip-link" href="#content">Перейти к содержимому</a>
+    <header id="header" class="site-header"></header>
+    <main id="content" class="container page" tabindex="-1"><p role="status">Загружаем Outfitly…</p></main>
+    <footer class="site-footer"><a class="wordmark" href="#/">Outfitly<span>atelier</span></a><p>Меньше поисков. Больше сочетаний.</p><a href="#/discover">Открытая коллекция ↗</a></footer>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <noscript>Для работы Outfitly включите JavaScript в браузере.</noscript>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

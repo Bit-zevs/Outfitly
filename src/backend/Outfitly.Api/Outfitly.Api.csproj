@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>Outfitly.Api.Development</UserSecretsId>
+  </PropertyGroup>
   <Target Name="RequirePreparedFrontend" BeforeTargets="ComputeFilesToPublish">
     <Error Condition="!Exists('wwwroot/index.html')" Text="Prepare frontend before publishing: npm run prepare:api from src/frontend." />
   </Target>

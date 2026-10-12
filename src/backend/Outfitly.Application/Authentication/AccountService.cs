@@ -10,8 +10,8 @@ public sealed class AccountService(IAccountStore store, IAccountPasswordHasher p
         CancellationToken cancellationToken = default)
     {
         var address = Email(email);
-        if (password is null || password.Length is < 15 or > 128)
-            throw new ArgumentException("Password must contain between 15 and 128 characters.");
+        if (password is null || password.Length is < 8 or > 128)
+            throw new ArgumentException("Password must contain between 8 and 128 characters.");
         var user = new User(Guid.NewGuid(), displayName);
         if (await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken) is not null)
             throw new AccountConflictException();
