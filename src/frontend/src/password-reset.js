@@ -19,10 +19,13 @@ export function passwordResetPage(ctx, reset) {
       }
       busy(form, true);
       try {
-        if (reset) await ctx.auth.resetPassword(token, form.elements.password.value);
+        if (reset) {
+          await ctx.auth.resetPassword(token, form.elements.password.value);
+          ctx.auth.clear();
+        }
         else await ctx.auth.forgotPassword(form.elements.email.value);
         if (!ctx.isCurrent()) return;
-        if (reset) { ctx.auth.clear(); ctx.navigate('/login', true); }
+        if (reset) ctx.navigate('/login', true);
         else status.textContent = 'Если аккаунт доступен для восстановления, письмо отправлено. Проверьте почту. Повторить запрос можно через минуту.';
       } catch (error) {
         if (ctx.isCurrent()) status.textContent = error.problem?.code === 'invalid_password_reset_token'
