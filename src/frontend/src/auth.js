@@ -29,5 +29,17 @@ export function createAuth(api) {
       user = null;
       api.resetCsrf();
     },
+    confirmEmail(token) {
+      return api.request('/auth/confirm-email', { method: 'POST', body: { token }, anonymous: true });
+    },
+    forgotPassword(email) {
+      return api.request('/auth/forgot-password', { method: 'POST', body: { email }, anonymous: true });
+    },
+    resetPassword(token, password) {
+      return api.request('/auth/reset-password', { method: 'POST', body: { token, password }, anonymous: true });
+    },
+    resendConfirmation(email) {
+      return api.request('/auth/resend-confirmation', { method: 'POST', body: { email }, anonymous: true });
+    },
   };
 }

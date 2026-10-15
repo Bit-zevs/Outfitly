@@ -4,6 +4,8 @@ import { escape, link } from './components.js';
 import { itemEditor, outfitEditor } from './editors.js';
 import { account, authPage, dashboard, detail, discover, home, notFound, outfitsPage, wardrobe } from './pages.js';
 import { parseRoute, privateRoute } from './router.js';
+import { checkEmailPage, confirmEmailPage } from './email-confirmation.js';
+import { passwordResetPage } from './password-reset.js';
 import { modal, toast } from './ui.js';
 
 const content = document.querySelector('#content');
@@ -40,6 +42,9 @@ function header(route) {
 async function resolve(ctx) {
   const { path, parts } = ctx.route;
   if (path === '/') return home(ctx);
+  if (path === '/check-email') return checkEmailPage(ctx);
+  if (path === '/confirm-email') return confirmEmailPage(ctx);
+  if (path === '/forgot-password' || path === '/reset-password') return passwordResetPage(ctx, path === '/reset-password');
   if (path === '/login' || path === '/register') return auth.user ? dashboard(ctx) : authPage(ctx, path === '/register');
   if (path === '/dashboard') return dashboard(ctx);
   if (path === '/wardrobe') return wardrobe(ctx);

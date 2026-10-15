@@ -7,17 +7,31 @@ namespace Outfitly.Infrastructure.Authentication;
 
 public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
 {
+    public void MarkCredentialsChecked(Account account) => context.Entry(account).Property(a => a.PasswordHash).IsModified = true;
+    public Task<Account?> FindByPasswordResetHashAsync(string hash, CancellationToken cancellationToken) =>
+        context.Accounts.SingleOrDefaultAsync(account => account.PasswordResetTokenHash == hash, cancellationToken);
+
+    public async Task RevokeSessionsAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        foreach (var session in await context.LoginSessions.Where(s => s.UserId == userId && !s.IsRevoked).ToListAsync(cancellationToken))
+            session.IsRevoked = true;
+    }
+
+    public Task<Account?> FindByConfirmationHashAsync(string hash, CancellationToken cancellationToken) =>
+        context.Accounts.SingleOrDefaultAsync(account => account.ConfirmationTokenHash == hash, cancellationToken);
+
     public Task<Account?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) =>
         context.Accounts.SingleOrDefaultAsync(account => account.NormalizedEmail == normalizedEmail, cancellationToken);
 
     public Task<AccountView?> GetUserAsync(Guid userId, CancellationToken cancellationToken) =>
         (from account in context.Accounts
          join user in context.Users on account.UserId equals user.Id
-         where user.Id == userId
+         where user.Id == userId && account.EmailConfirmed
          select new AccountView(user.Id, account.Email, user.DisplayName)).SingleOrDefaultAsync(cancellationToken);
 
     public Task<LoginSession?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
-        context.LoginSessions.SingleOrDefaultAsync(session => session.Id == sessionId, cancellationToken);
+        context.LoginSessions.SingleOrDefaultAsync(session => session.Id == sessionId &&
+            context.Accounts.Any(account => account.UserId == session.UserId && account.SessionVersion == session.SessionVersion), cancellationToken);
 
     public void Add(User user, Account account)
     {

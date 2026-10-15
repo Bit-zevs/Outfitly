@@ -6,10 +6,19 @@ public sealed class Account
     public string Email { get; init; } = null!;
     public string NormalizedEmail { get; init; } = null!;
     public string PasswordHash { get; set; } = null!;
+    public bool EmailConfirmed { get; set; }
+    public string? ConfirmationTokenHash { get; set; }
+    public DateTime? ConfirmationExpiresAtUtc { get; set; }
+    public DateTime? ConfirmationIssuedAtUtc { get; set; }
+    public string? PasswordResetTokenHash { get; set; }
+    public DateTime? PasswordResetExpiresAtUtc { get; set; }
+    public DateTime? PasswordResetIssuedAtUtc { get; set; }
+    public Guid SessionVersion { get; set; }
 }
 
 public sealed class LoginSession
 {
+    public Guid SessionVersion { get; init; }
     public Guid Id { get; init; }
     public Guid UserId { get; init; }
     public DateTime ExpiresAtUtc { get; init; }

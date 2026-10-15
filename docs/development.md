@@ -63,6 +63,45 @@ dotnet user-secrets set "ConnectionStrings:Outfitly" "Host=127.0.0.1;Port=5433;D
 Сначала GET `/api/auth/csrf`, затем POST регистрации/входа с cookie и заголовком
 `X-CSRF-TOKEN`. После входа получите токен заново для личных команд.
 
+### Подтверждение почты, сброс пароля и SMTP.BZ
+
+Безопасные значения в `Outfitly.Api/appsettings.json`: `EmailConfirmation:Host` =
+`connect.smtp.bz`, `Port` = 587, `From` = `no-reply@outfitlyapp.ru`, `FromName` = `Outfitly`.
+Существующий ключ `From` сохранён. SMTP использует обязательный STARTTLS и системную
+проверку сертификата. Логин и пароль обязательны; HTTP API и API-ключ не используются.
+Конфигурация проверяется перед отправкой, до подключения; без секретов API может
+запуститься, но отправка возвращает безопасную ошибку, без SMTP-диагностики в логах.
+
+Из корня репозитория задайте секреты (подставьте реальные значения локально):
+
+```powershell
+dotnet user-secrets set "EmailConfirmation:Username" "<smtp-login>" --project src/backend/Outfitly.Api/Outfitly.Api.csproj
+dotnet user-secrets set "EmailConfirmation:Password" "<smtp-password>" --project src/backend/Outfitly.Api/Outfitly.Api.csproj
+```
+
+`PublicUrl` остаётся `https://localhost:7043`. Это HTTPS origin frontend без пути,
+query, fragment или учётных данных; ссылки не строятся из Host запроса. Открывайте
+локальные ссылки на том же ноутбуке с запущенным API. При публикации измените
+`EmailConfirmation__PublicUrl` на реальный HTTPS origin. На AdminVPS передавайте
+`EmailConfirmation__Username` и `EmailConfirmation__Password` через защищённое
+окружение сервиса; при необходимости переопределите остальные ключи аналогично.
+Не сохраняйте секреты в appsettings, репозитории или примерах конфигурации.
+
+Для одного настоящего тестового письма примените миграции по
+[инструкции Infrastructure](../src/backend/Outfitly.Infrastructure/README.md#миграции),
+выполните `npm run prepare:api --prefix src/frontend`, запустите API с профилем https
+и откройте `https://localhost:7043/#/register`. Зарегистрируйте свой личный адрес,
+которого ещё нет в БД: приложение отправит одно письмо. Откройте ссылку на ноутбуке
+и нажмите подтверждение на сайте. Если адрес уже зарегистрирован, но не подтверждён,
+используйте `/#/check-email` после минутного интервала. Для подтверждённого аккаунта
+одно письмо сброса можно запросить через `/#/forgot-password`.
+
+Проверьте в SMTP.BZ завершение модерации домена и доступность отправителя.
+При сбое SMTP регистрация сохраняется; повторная отправка доступна через минуту.
+Запрос восстановления всегда возвращает нейтральный ответ, даже при сбое SMTP.
+Точные сроки и контракты — в [API](../src/backend/Outfitly.Api/README.md).
+Автоматические тесты подменяют отправку и не подключаются к SMTP.BZ.
+
 ### Ключи и размещение API
 
 Cookie защищает ASP.NET Core Data Protection с именем приложения `Outfitly`.
