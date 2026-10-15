@@ -14,7 +14,12 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.Property(account => account.UserId).ValueGeneratedNever();
         builder.Property(account => account.Email).HasMaxLength(254).IsRequired();
         builder.Property(account => account.NormalizedEmail).HasMaxLength(254).IsRequired();
-        builder.Property(account => account.PasswordHash).IsRequired();
+        builder.Property(account => account.PasswordHash).IsRequired().IsConcurrencyToken();
+        builder.Property(account => account.PasswordResetTokenHash).HasMaxLength(64).IsConcurrencyToken();
+        builder.HasIndex(account => account.PasswordResetTokenHash).IsUnique();
+        builder.Property(account => account.EmailConfirmed).HasDefaultValue(false);
+        builder.Property(account => account.ConfirmationTokenHash).HasMaxLength(64).IsConcurrencyToken();
+        builder.HasIndex(account => account.ConfirmationTokenHash).IsUnique();
         builder.HasIndex(account => account.NormalizedEmail).IsUnique();
         builder.HasOne<User>().WithOne().HasForeignKey<Account>(account => account.UserId).OnDelete(DeleteBehavior.Cascade);
     }

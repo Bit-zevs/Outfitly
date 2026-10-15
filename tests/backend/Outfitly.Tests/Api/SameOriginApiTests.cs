@@ -21,6 +21,7 @@ public sealed class SameOriginApiTests
         await ApiFactory.SetCsrfAsync(browser);
         const string password = "a long password with spaces";
         (await browser.PostAsJsonAsync("/api/auth/register", new { email = "photo@example.com", password, displayName = "Owner" })).EnsureSuccessStatusCode();
+        await factory.ConfirmEmailAsync(browser, "photo@example.com");
         (await browser.PostAsJsonAsync("/api/auth/login", new { email = "photo@example.com", password })).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(browser);
         var id = await PhotoApiTests.CreateItem(browser);

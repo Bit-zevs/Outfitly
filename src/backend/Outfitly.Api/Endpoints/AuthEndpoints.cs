@@ -19,11 +19,48 @@ public static class AuthEndpoints
             return Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken });
         });
         auth.MapPost("/register", async (RegisterRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, IConfirmationEmailSender sender, CancellationToken cancellationToken) =>
         {
             var user = await accounts.RegisterAsync(request.Email, request.Password, request.DisplayName, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return Results.Created("/api/auth/me", user);
+            var sent = true;
+            try { await sender.SendAsync(user.Confirmation, cancellationToken); }
+            catch (EmailDeliveryException) { sent = false; }
+            return Results.Created("/api/auth/me", new { user.Id, user.Email, user.DisplayName, confirmationEmailSent = sent });
+        }).RequireRateLimiting("account-access");
+        auth.MapPost("/confirm-email", async (ConfirmEmailRequest request, AccountService accounts,
+            IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
+        {
+            await accounts.ConfirmEmailAsync(request.Token, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Results.NoContent();
+        }).RequireRateLimiting("account-access");
+        auth.MapPost("/resend-confirmation", async (ResendConfirmationRequest request, AccountService accounts,
+            IUnitOfWork unitOfWork, IConfirmationEmailSender sender, CancellationToken cancellationToken) =>
+        {
+            var email = await accounts.ResendConfirmationAsync(request.Email, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            if (email is not null) await sender.SendAsync(email, cancellationToken);
+            return Results.Json(new { message = "If confirmation is needed, an email has been sent." }, statusCode: 202);
+        }).RequireRateLimiting("account-access");
+        auth.MapPost("/forgot-password", async (ResendConfirmationRequest request, AccountService accounts,
+            IUnitOfWork unitOfWork, IConfirmationEmailSender sender, CancellationToken cancellationToken) =>
+        {
+            var email = await accounts.RequestPasswordResetAsync(request.Email, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            if (email is not null)
+            {
+                try { await sender.SendAsync(email, cancellationToken); }
+                catch (EmailDeliveryException) { /* Keep the response independent of account existence. */ }
+            }
+            return Results.Json(new { message = "If the account is eligible, a password reset email has been sent." }, statusCode: 202);
+        }).RequireRateLimiting("account-access");
+        auth.MapPost("/reset-password", async (ResetPasswordRequest request, AccountService accounts,
+            IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
+        {
+            await accounts.ResetPasswordAsync(request.Token, request.Password, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Results.NoContent();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/login", async (LoginRequest request, AccountService accounts,
             IUnitOfWork unitOfWork, HttpContext context, CancellationToken cancellationToken) =>
@@ -67,4 +104,7 @@ public static class AuthEndpoints
 
     public sealed record RegisterRequest(string Email, string Password, string DisplayName);
     public sealed record LoginRequest(string Email, string Password);
+    public sealed record ResetPasswordRequest(string Token, string Password);
+    public sealed record ConfirmEmailRequest(string Token);
+    public sealed record ResendConfirmationRequest(string Email);
 }

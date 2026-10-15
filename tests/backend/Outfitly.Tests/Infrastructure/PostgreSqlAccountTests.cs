@@ -41,7 +41,10 @@ public sealed class PostgreSqlAccountTests
         Guid owner;
         await using (var register = database.Open())
         {
-            owner = (await Service(register).RegisterAsync("alice@example.com", "a long test password", "Alice")).Id;
+            var registered = await Service(register).RegisterAsync("alice@example.com", "a long test password", "Alice");
+            owner = registered.Id;
+            await register.SaveChangesAsync();
+            await Service(register).ConfirmEmailAsync(registered.Confirmation.Token);
             await register.SaveChangesAsync();
         }
         LoginResult first;
