@@ -1,3 +1,4 @@
+import { profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
 import { escape, link } from './components.js';
@@ -51,6 +52,11 @@ async function resolve(ctx) {
   if (path === '/outfits') return outfitsPage(ctx);
   if (path === '/discover') return discover(ctx);
   if (path === '/account') return account(ctx);
+  if (parts[0]?.startsWith('@')) {
+    const username = decodeURIComponent(parts[0].slice(1));
+    if (parts.length === 1) return profilePage(ctx, username);
+    if (parts.length === 3 && ['items', 'outfits'].includes(parts[1])) return detail(ctx, parts[1], parts[2], 'public', username);
+  }
   if (path === '/items/new') return itemEditor(ctx);
   if (path === '/outfits/new') return outfitEditor(ctx);
   if (parts.length === 3 && ['items', 'outfits'].includes(parts[0]) && parts[2] === 'edit') return parts[0] === 'items' ? itemEditor(ctx, parts[1]) : outfitEditor(ctx, parts[1]);
