@@ -26,3 +26,11 @@ export function safeReturn(value) {
 export function shareAddress(origin, kind, token) {
   return `${origin}/#/shared/${kind}/${encodeURIComponent(token)}`;
 }
+
+export function profilePath(username) {
+  return `/@${encodeURIComponent(username)}`;
+}
+
+export function publicPath(username, kind, id) {
+  return `${profilePath(username)}/${kind}/${encodeURIComponent(id)}`;
+}

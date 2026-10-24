@@ -7,6 +7,11 @@ namespace Outfitly.Infrastructure.Authentication;
 
 public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
 {
+    public Task<User?> FindUserAsync(Guid userId, CancellationToken cancellationToken) =>
+        context.Users.SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
+
+    public Task<bool> UsernameExistsAsync(string username, Guid exceptUserId, CancellationToken cancellationToken) =>
+        context.Users.AnyAsync(user => user.Username == username && user.Id != exceptUserId, cancellationToken);
     public void MarkCredentialsChecked(Account account) => context.Entry(account).Property(a => a.PasswordHash).IsModified = true;
     public Task<Account?> FindByPasswordResetHashAsync(string hash, CancellationToken cancellationToken) =>
         context.Accounts.SingleOrDefaultAsync(account => account.PasswordResetTokenHash == hash, cancellationToken);
@@ -27,7 +32,7 @@ public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
         (from account in context.Accounts
          join user in context.Users on account.UserId equals user.Id
          where user.Id == userId && account.EmailConfirmed
-         select new AccountView(user.Id, account.Email, user.DisplayName)).SingleOrDefaultAsync(cancellationToken);
+         select new AccountView(user.Id, account.Email, user.DisplayName, user.Username)).SingleOrDefaultAsync(cancellationToken);
 
     public Task<LoginSession?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
         context.LoginSessions.SingleOrDefaultAsync(session => session.Id == sessionId &&

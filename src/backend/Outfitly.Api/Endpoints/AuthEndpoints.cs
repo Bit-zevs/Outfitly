@@ -13,6 +13,13 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var auth = app.MapGroup("/api/auth");
+        auth.MapPatch("/me/username", async (UsernameRequest request, HttpContext context, AccountService accounts,
+            IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
+        {
+            var user = await accounts.ChangeUsernameAsync(CurrentActor.Id(context.User), request.Username, cancellationToken);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            return Results.Ok(user);
+        }).RequireAuthorization(CurrentActor.PolicyName);
         auth.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
         {
             context.Response.Headers.CacheControl = "no-store";
@@ -21,12 +28,12 @@ public static class AuthEndpoints
         auth.MapPost("/register", async (RegisterRequest request, AccountService accounts,
             IUnitOfWork unitOfWork, IConfirmationEmailSender sender, CancellationToken cancellationToken) =>
         {
-            var user = await accounts.RegisterAsync(request.Email, request.Password, request.DisplayName, cancellationToken);
+            var user = await accounts.RegisterAsync(request.Email, request.Password, request.DisplayName, request.Username, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             var sent = true;
             try { await sender.SendAsync(user.Confirmation, cancellationToken); }
             catch (EmailDeliveryException) { sent = false; }
-            return Results.Created("/api/auth/me", new { user.Id, user.Email, user.DisplayName, confirmationEmailSent = sent });
+            return Results.Created("/api/auth/me", new { user.Id, user.Email, user.DisplayName, user.Username, confirmationEmailSent = sent });
         }).RequireRateLimiting("account-access");
         auth.MapPost("/confirm-email", async (ConfirmEmailRequest request, AccountService accounts,
             IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
@@ -102,7 +109,8 @@ public static class AuthEndpoints
         }).RequireAuthorization(CurrentActor.PolicyName);
     }
 
-    public sealed record RegisterRequest(string Email, string Password, string DisplayName);
+    public sealed record RegisterRequest(string Email, string Password, string DisplayName, string Username);
+    public sealed record UsernameRequest(string Username);
     public sealed record LoginRequest(string Email, string Password);
     public sealed record ResetPasswordRequest(string Token, string Password);
     public sealed record ConfirmEmailRequest(string Token);

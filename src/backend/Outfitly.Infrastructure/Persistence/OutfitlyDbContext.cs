@@ -20,6 +20,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         try { return base.SaveChanges(acceptAllChangesOnSuccess); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
+        catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
@@ -28,7 +29,13 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
+        catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
     }
+
+    private static bool IsDuplicateUsername(DbUpdateException exception) => exception.InnerException is PostgresException
+    {
+        SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_Users_Username"
+    };
 
     private static bool IsDuplicateEmail(DbUpdateException exception) => exception.InnerException is PostgresException
     {

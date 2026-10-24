@@ -18,7 +18,7 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
-            var registered = await service.RegisterAsync("alice@example.com", password, "Alice");
+            var registered = await service.RegisterAsync("alice@example.com", password, "Alice", "alice");
             await write.SaveChangesAsync();
             await service.ConfirmEmailAsync(registered.Confirmation.Token);
             (await write.Accounts.SingleAsync()).PasswordHash = oldHash;
@@ -51,12 +51,12 @@ public sealed class AccountPersistenceTests
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
             if (accepted)
             {
-                await service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary");
+                await service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary", "boundary");
                 await write.SaveChangesAsync();
             }
             else
                 await Assert.ThrowsAsync<ArgumentException>(() =>
-                    service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary"));
+                    service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary", "boundary"));
         }
         await using var read = database.Open();
         Assert.Equal(accepted ? 1 : 0, await read.Users.CountAsync());

@@ -8,13 +8,15 @@ namespace Outfitly.Application.Authentication;
 // Prepares changes only; the HTTP boundary commits before issuing a cookie.
 public sealed class AccountService(IAccountStore store, IAccountPasswordHasher passwords, TimeProvider clock)
 {
-    public async Task<RegisteredAccount> RegisterAsync(string email, string password, string displayName,
+    public async Task<RegisteredAccount> RegisterAsync(string email, string password, string displayName, string username,
         CancellationToken cancellationToken = default)
     {
         var address = Email(email);
         if (password is null || password.Length is < 8 or > 128)
             throw new ArgumentException("Password must contain between 8 and 128 characters.");
-        var user = new User(Guid.NewGuid(), displayName);
+        var user = new User(Guid.NewGuid(), displayName, Usernames.Normalize(username));
+        if (await store.UsernameExistsAsync(user.Username, user.Id, cancellationToken))
+            throw new UsernameConflictException();
         if (await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken) is not null)
             throw new AccountConflictException();
         var account = new Account
@@ -24,7 +26,7 @@ public sealed class AccountService(IAccountStore store, IAccountPasswordHasher p
         };
         var confirmation = IssueConfirmation(account);
         store.Add(user, account);
-        return new RegisteredAccount(user.Id, address, user.DisplayName, confirmation);
+        return new RegisteredAccount(user.Id, address, user.DisplayName, user.Username, confirmation);
     }
 
     public async Task<ConfirmationEmail?> ResendConfirmationAsync(string email, CancellationToken cancellationToken = default)
@@ -129,6 +131,17 @@ public sealed class AccountService(IAccountStore store, IAccountPasswordHasher p
 
     public Task<AccountView?> GetUserAsync(Guid userId, CancellationToken cancellationToken = default) =>
         store.GetUserAsync(userId, cancellationToken);
+
+    public async Task<AccountView> ChangeUsernameAsync(Guid actorId, string username, CancellationToken cancellationToken = default)
+    {
+        if (actorId == Guid.Empty) throw new UnauthorizedAccessException();
+        var user = await store.FindUserAsync(actorId, cancellationToken) ?? throw new KeyNotFoundException();
+        var normalized = Usernames.Normalize(username);
+        if (await store.UsernameExistsAsync(normalized, actorId, cancellationToken)) throw new UsernameConflictException();
+        user.ChangeUsername(normalized);
+        var account = await store.GetUserAsync(actorId, cancellationToken) ?? throw new KeyNotFoundException();
+        return account with { Username = normalized };
+    }
 
     private static string Email(string email)
     {

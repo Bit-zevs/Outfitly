@@ -25,8 +25,11 @@ public sealed class LoginSession
     public bool IsRevoked { get; set; }
 }
 
-public sealed record AccountView(Guid Id, string Email, string DisplayName);
+public sealed record AccountView(Guid Id, string Email, string DisplayName, string Username);
 public sealed record LoginResult(AccountView User, LoginSession Session);
 
 public sealed class AccountConflictException(Exception? inner = null)
     : Exception("An account with this email already exists.", inner);
+
+public sealed class UsernameConflictException(Exception? inner = null)
+    : Exception("This username is already taken.", inner);

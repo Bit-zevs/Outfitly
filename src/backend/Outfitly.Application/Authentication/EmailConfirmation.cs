@@ -2,7 +2,7 @@ namespace Outfitly.Application.Authentication;
 
 public enum AccountEmailPurpose { Confirmation, PasswordReset }
 public sealed record ConfirmationEmail(string Email, string Token, AccountEmailPurpose Purpose = AccountEmailPurpose.Confirmation);
-public sealed record RegisteredAccount(Guid Id, string Email, string DisplayName, ConfirmationEmail Confirmation);
+public sealed record RegisteredAccount(Guid Id, string Email, string DisplayName, string Username, ConfirmationEmail Confirmation);
 
 public interface IConfirmationEmailSender
 {

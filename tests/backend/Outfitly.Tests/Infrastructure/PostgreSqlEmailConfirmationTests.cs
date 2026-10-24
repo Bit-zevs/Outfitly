@@ -19,7 +19,7 @@ public sealed class PostgreSqlEmailConfirmationTests
             await migrate.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Users\" (\"Id\", \"DisplayName\") VALUES ({existing}, 'Legacy')");
             await migrate.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Accounts\" (\"UserId\", \"Email\", \"NormalizedEmail\", \"PasswordHash\") VALUES ({existing}, 'old@example.com', 'OLD@EXAMPLE.COM', 'unused')");
             await migrator.MigrateAsync();
-            await migrate.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Users\" (\"Id\", \"DisplayName\") VALUES ({added}, 'New')");
+            await migrate.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Users\" (\"Id\", \"DisplayName\", \"Username\") VALUES ({added}, 'New', 'new_user')");
             await migrate.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO \"Accounts\" (\"UserId\", \"Email\", \"NormalizedEmail\", \"PasswordHash\") VALUES ({added}, 'new@example.com', 'NEW@EXAMPLE.COM', 'unused')");
         }
         await using var read = database.Open();

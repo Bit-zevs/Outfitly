@@ -19,10 +19,14 @@ export function createAuth(api) {
       api.resetCsrf();
       return user;
     },
-    async register(displayName, email, password, confirmation) {
+    async register(displayName, email, password, confirmation, username) {
       const mismatch = passwordConfirmationError(password, confirmation);
       if (mismatch) throw new ApiError(400, { detail: mismatch });
-      return api.request('/auth/register', { method: 'POST', body: { displayName, email, password }, anonymous: true });
+      return api.request('/auth/register', { method: 'POST', body: { displayName, email, password, username }, anonymous: true });
+    },
+    async changeUsername(username) {
+      user = await api.request('/auth/me/username', { method: 'PATCH', body: { username } });
+      return user;
     },
     async logout() {
       await api.request('/auth/logout', { method: 'POST' });

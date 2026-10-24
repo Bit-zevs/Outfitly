@@ -1,3 +1,4 @@
+import { publicPath } from './router.js';
 export const categories = { Top: 'Верх', Bottom: 'Низ', Dress: 'Платья', Outerwear: 'Верхняя одежда', Footwear: 'Обувь', Accessory: 'Аксессуары' };
 export const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const link = (path, text, style = '') => `<a class="${style}" href="#${escape(path)}">${escape(text)}</a>`;
@@ -11,12 +12,14 @@ export function photo(item, className = '', decorative = false) {
   return `<div class="photo ${className}">${safe ? `<img src="${escape(url)}" alt="${decorative ? '' : escape(item.name)}" loading="lazy" referrerpolicy="no-referrer">` : `<span class="photo-placeholder" ${decorative ? 'aria-hidden="true"' : 'role="img" aria-label="Без фотографии"'}>◇</span>`}</div>`;
 }
 export function itemCard(item, base = '/items') {
+  if (base === '/public/items' && item.ownerUsername) base = publicPath(item.ownerUsername, 'items', '').replace(/\/$/, '');
   return `<article class="item-card"><a href="#${base}/${escape(item.id)}">${photo(item, '', true)}<div class="card-heading"><h3>${escape(item.name)}</h3>${item.isPublic ? '<span class="public-dot" title="Опубликовано" aria-label="Опубликовано"></span>' : ''}</div><p>${escape(categories[item.category] || item.category)}${item.brand ? ` · ${escape(item.brand)}` : ''}</p></a></article>`;
 }
 export function collage(outfit) {
   return `<div class="collage ${outfit.items.length === 1 ? 'single' : ''}">${outfit.items.length ? outfit.items.slice(0, 4).map(item => photo(item, '', true)).join('') : '<span class="photo-placeholder">◇</span>'}</div>`;
 }
 export function outfitCard(outfit, base = '/outfits') {
+  if (base === '/public/outfits' && outfit.ownerUsername) base = publicPath(outfit.ownerUsername, 'outfits', '').replace(/\/$/, '');
   return `<article class="outfit-card"><a href="#${base}/${escape(outfit.id)}">${collage(outfit)}<div class="card-heading"><h3>${escape(outfit.name)}</h3>${badge(outfit.isPublic)}</div><p>Вещей в образе: ${outfit.items.length}</p></a></article>`;
 }
 export function field(label, name, value = '', { type = 'text', required = false, hint = '', autocomplete = '', min = '', max = '' } = {}) {

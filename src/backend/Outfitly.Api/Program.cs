@@ -89,6 +89,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapWardrobeEndpoints();
 app.MapPhotoEndpoints();
 app.MapAuthEndpoints();
+app.MapUserEndpoints();
 
 app.Run();
 

@@ -6,13 +6,13 @@ public static class WardrobeResponses
 {
     public static object Item(ItemView item, string photoRoute) => new
     {
-        item.Id, item.OwnerId, item.Name, item.Category, item.Color, item.Size, item.Brand,
+        item.Id, item.OwnerId, item.OwnerUsername, item.Name, item.Category, item.Color, item.Size, item.Brand,
         item.Description, PhotoUrl = item.HasUploadedPhoto ? photoRoute : item.PhotoUrl, item.IsPublic
     };
 
     public static object Outfit(OutfitView outfit, Func<Guid, string> photoRoute) => new
     {
-        outfit.Id, outfit.OwnerId, outfit.Name, outfit.Description, outfit.IsPublic,
+        outfit.Id, outfit.OwnerId, outfit.OwnerUsername, outfit.Name, outfit.Description, outfit.IsPublic,
         Items = outfit.Items.Select(item => Item(item, photoRoute(item.Id))).ToArray()
     };
 
