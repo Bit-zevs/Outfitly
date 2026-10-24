@@ -63,12 +63,24 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
 
+                    b.Property<DateTime?>("EmailChangeExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("EmailChangeIssuedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EmailChangeTokenHash")
+                        .IsConcurrencyToken()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("EmailConfirmed")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
                     b.Property<string>("NormalizedEmail")
+                        .IsConcurrencyToken()
                         .IsRequired()
                         .HasMaxLength(254)
                         .HasColumnType("character varying(254)");
@@ -89,12 +101,24 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<string>("PendingEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("PendingNormalizedEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
                     b.Property<Guid>("SessionVersion")
+                        .IsConcurrencyToken()
                         .HasColumnType("uuid");
 
                     b.HasKey("UserId");
 
                     b.HasIndex("ConfirmationTokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("EmailChangeTokenHash")
                         .IsUnique();
 
                     b.HasIndex("NormalizedEmail")

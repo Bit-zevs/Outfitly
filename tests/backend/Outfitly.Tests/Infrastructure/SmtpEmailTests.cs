@@ -15,6 +15,7 @@ public sealed class SmtpEmailTests
     [Theory]
     [InlineData(AccountEmailPurpose.Confirmation, "confirm-email", "24 часа")]
     [InlineData(AccountEmailPurpose.PasswordReset, "reset-password", "1 час")]
+    [InlineData(AccountEmailPurpose.EmailChange, "confirm-email-change", "24 часа")]
     public async Task Sends_multipart_branded_email_using_configured_origin_and_authenticated_StartTls(
         AccountEmailPurpose purpose, string route, string lifetime)
     {
