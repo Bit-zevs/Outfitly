@@ -138,7 +138,7 @@ public sealed class AuthenticationApiTests
         using var factory = new ApiFactory(testAuthentication: false);
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
-        var data = new { email = "alice@example.com", password = Password, displayName = "Alice" };
+        var data = new { email = "alice@example.com", password = Password, displayName = "Alice", username = "alice" };
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync(route, data)).StatusCode);
         await ApiFactory.SetCsrfAsync(client);
         client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
@@ -242,7 +242,7 @@ public sealed class AuthenticationApiTests
         var password = new string('x', length);
         await ApiFactory.SetCsrfAsync(client);
         var registration = await client.PostAsJsonAsync("/api/auth/register",
-            new { email = "short@example.com", password, displayName = "Alice" });
+            new { email = "short@example.com", password, displayName = "Alice", username = "alice" });
         Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
         var login = await Login(factory, client, "short@example.com", password);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
@@ -261,7 +261,7 @@ public sealed class AuthenticationApiTests
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         await ApiFactory.SetCsrfAsync(client);
-        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, password, displayName = name });
+        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, password, displayName = name, username = "validation" });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -322,7 +322,7 @@ public sealed class AuthenticationApiTests
         {
             var route = i % 2 == 0 ? "register" : "login";
             var response = await client.PostAsJsonAsync($"/api/auth/{route}",
-                new { email = "unknown@example.com", password = "wrong", displayName = "Alice" });
+                new { email = "unknown@example.com", password = "wrong", displayName = "Alice", username = "alice" });
             Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
         }
         var limited = await Login(factory, client, "unknown@example.com");
@@ -356,7 +356,7 @@ public sealed class AuthenticationApiTests
     private static async Task<HttpResponseMessage> Register(HttpClient client, string email)
     {
         await ApiFactory.SetCsrfAsync(client);
-        return await client.PostAsJsonAsync("/api/auth/register", new { email, password = Password, displayName = " Alice " });
+        return await client.PostAsJsonAsync("/api/auth/register", new { email, password = Password, displayName = " Alice ", username = "test_" + Guid.NewGuid().ToString("N")[..20] });
     }
 
     private static async Task<HttpResponseMessage> Login(ApiFactory factory, HttpClient client, string email, string password = Password)

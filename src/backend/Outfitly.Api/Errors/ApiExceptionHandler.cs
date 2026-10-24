@@ -23,6 +23,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
             BadHttpRequestException bad => bad.StatusCode,
             WardrobeConcurrencyException => StatusCodes.Status409Conflict,
             AccountConflictException => StatusCodes.Status409Conflict,
+            UsernameConflictException => StatusCodes.Status409Conflict,
             ArgumentException => StatusCodes.Status400BadRequest,
             KeyNotFoundException => StatusCodes.Status404NotFound,
             UnauthorizedAccessException => StatusCodes.Status403Forbidden,
@@ -45,6 +46,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         context.Response.StatusCode = status;
         var code = exception switch
         {
+            UsernameConflictException => "username_taken",
             EmailNotConfirmedException => "email_not_confirmed",
             InvalidConfirmationTokenException => "invalid_confirmation_token",
             InvalidPasswordResetTokenException => "invalid_password_reset_token",

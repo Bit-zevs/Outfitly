@@ -34,7 +34,7 @@ public sealed class EmailConfirmationPersistenceTests
         string token;
         await using (var register = open())
         {
-            token = (await Service(register, clock).RegisterAsync("race@example.com", "a race test password", "Race")).Confirmation.Token;
+            token = (await Service(register, clock).RegisterAsync("race@example.com", "a race test password", "Race", "race")).Confirmation.Token;
             await register.SaveChangesAsync();
         }
         clock.Now = clock.Now.AddSeconds(60);
@@ -67,7 +67,7 @@ public sealed class EmailConfirmationPersistenceTests
         RegisteredAccount account;
         await using (var register = database.Open())
         {
-            account = await Service(register, clock).RegisterAsync("expiry@example.com", "an expiry test password", "Expiry");
+            account = await Service(register, clock).RegisterAsync("expiry@example.com", "an expiry test password", "Expiry", "expiry");
             await register.SaveChangesAsync();
         }
         clock.Now = clock.Now.AddHours(24);

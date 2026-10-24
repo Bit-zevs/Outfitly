@@ -17,6 +17,8 @@ public static class DependencyInjection
         services.AddDbContext<OutfitlyDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWardrobeRepository, EfWardrobeRepository>();
         services.AddScoped<IItemCatalogQuery, EfItemCatalogQuery>();
+        services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
+        services.AddScoped<PublicProfiles>();
         services.AddSingleton<IPhotoProcessor, Photos.SkiaPhotoProcessor>();
         services.AddScoped<IAccountStore, EfAccountStore>();
         services.AddSingleton<IAccountPasswordHasher, AccountPasswordHasher>();

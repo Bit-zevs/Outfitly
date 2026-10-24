@@ -12,5 +12,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(user => user.Id);
         builder.Property(user => user.Id).ValueGeneratedNever();
         builder.Property(user => user.DisplayName).IsRequired();
+        builder.Property(user => user.Username).HasMaxLength(30).IsRequired();
+        builder.HasIndex(user => user.Username).IsUnique();
     }
 }

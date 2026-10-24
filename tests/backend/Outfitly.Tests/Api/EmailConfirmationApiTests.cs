@@ -157,7 +157,7 @@ public sealed class EmailConfirmationApiTests
     private static async Task<HttpResponseMessage> Register(HttpClient client)
     {
         await ApiFactory.SetCsrfAsync(client);
-        return await client.PostAsJsonAsync("/api/auth/register", new { email = Email, password = Password, displayName = "Confirm" });
+        return await client.PostAsJsonAsync("/api/auth/register", new { email = Email, password = Password, displayName = "Confirm", username = "confirm" });
     }
     private static Task<HttpResponseMessage> Resend(HttpClient client) => client.PostAsJsonAsync("/api/auth/resend-confirmation", new { email = Email });
     private static async Task AllowResend(ApiFactory factory)

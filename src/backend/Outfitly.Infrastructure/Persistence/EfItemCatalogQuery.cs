@@ -33,7 +33,8 @@ public sealed class EfItemCatalogQuery(OutfitlyDbContext context) : IItemCatalog
         var ordered = query.Sort == "nameDesc" ? items.OrderByDescending(item => item.Name) : items.OrderBy(item => item.Name);
         var page = await ordered.ThenBy(item => item.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(item => new ItemView(item.Id, item.OwnerId, item.Name, item.Category, item.Color, item.Size,
-                item.Brand, item.Description, item.PhotoUrl, item.IsPublic, item.PhotoStorageKey != null))
+                item.Brand, item.Description, item.PhotoUrl, item.IsPublic, item.PhotoStorageKey != null,
+                context.Users.Where(user => user.Id == item.OwnerId).Select(user => user.Username).Single()))
             .ToArrayAsync(cancellationToken);
         return new(page, total, query.Page, query.PageSize);
     }
