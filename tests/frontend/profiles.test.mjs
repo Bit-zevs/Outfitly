@@ -88,22 +88,22 @@ test('renaming updates the auth user and refreshed profile links; conflict prese
   let conflict = true, refreshes = 0;
   const auth = createAuth({ async request(path, options) {
     if (path === '/auth/me') return { username: 'anna', displayName: 'Анна', email: 'anna@example.com' };
-    assert.equal(path, '/auth/me/username');
+    assert.equal(path, '/auth/me/profile');
     assert.equal(options.method, 'PATCH');
     if (conflict) throw new ApiError(409, { code: 'username_taken' });
     return { username: 'new_anna', displayName: 'Анна', email: 'anna@example.com' };
   } });
   await auth.restore();
-  const ctx = { auth, isCurrent: () => true, refresh() { refreshes++; }, toast() {} };
+  const ctx = { auth, isCurrent: () => true, updateHeader() { refreshes++; }, toast() {} };
   mount(t, account(ctx));
   const form = document.querySelector('form'); form.elements.username.value = 'new_anna';
   await form.onsubmit({ preventDefault });
-  assert.match(document.querySelector('#username-error').textContent, /уже занят/);
+  assert.match(document.querySelector('#profile-error').textContent, /уже занят/);
   assert.equal(auth.user.username, 'anna');
   assert.equal(form.elements.username.value, 'new_anna');
   conflict = false;
   await form.onsubmit({ preventDefault });
-  assert.equal(refreshes, 1);
+  assert.equal(refreshes, 2);
   assert.equal(auth.user.username, 'new_anna');
   assert.match(account(ctx).html, /href="#\/@new_anna"/);
 });

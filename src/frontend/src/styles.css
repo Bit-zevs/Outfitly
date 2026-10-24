@@ -1363,6 +1363,10 @@ strong {
   background: var(--white);
 }
 
+.account-panel + .account-panel {
+  margin-top: 24px;
+}
+
 .account-identity {
   display: flex;
   gap: 22px;

@@ -1,3 +1,4 @@
+import { confirmEmailChangePage } from './account-settings.js';
 import { profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
@@ -45,6 +46,7 @@ async function resolve(ctx) {
   if (path === '/') return home(ctx);
   if (path === '/check-email') return checkEmailPage(ctx);
   if (path === '/confirm-email') return confirmEmailPage(ctx);
+  if (path === '/confirm-email-change') return confirmEmailChangePage(ctx);
   if (path === '/forgot-password' || path === '/reset-password') return passwordResetPage(ctx, path === '/reset-password');
   if (path === '/login' || path === '/register') return auth.user ? dashboard(ctx) : authPage(ctx, path === '/register');
   if (path === '/dashboard') return dashboard(ctx);
@@ -88,7 +90,7 @@ async function render() {
       header(route);
     }
     if (privateRoute(route.path) && !auth.user) { navigate(`/login?return=${encodeURIComponent(route.path + (route.query.size ? `?${route.query}` : ''))}`, true); return; }
-    const ctx = { route, api, auth, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
+    const ctx = { route, api, auth, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, updateHeader: () => { if (isCurrent()) header(parseRoute(location.hash)); }, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
     const page = await resolve(ctx);
     if (!isCurrent()) return;
     header(route);

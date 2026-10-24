@@ -1,3 +1,4 @@
+import { accountSettings } from './account-settings.js';
 import { peoplePage, copyAddress } from './profiles.js';
 import { ApiError } from './api.js';
 import { passwordConfirmationError } from './auth.js';
@@ -161,35 +162,7 @@ function shareDialog(ctx, kind, id) {
 }
 
 export function account(ctx) {
-  const user = ctx.auth.user;
-  return { title: 'Мой аккаунт', html: `<section class="account">${title('Личные данные', 'Мой аккаунт', 'Ваше пространство в Outfitly.')}<div class="account-panel"><h2>${escape(user.displayName)}</h2><p>${escape(user.email)}</p><p>${link(profilePath(user.username), `@${user.username}`)}</p><div class="actions">${link(profilePath(user.username), 'Открыть мой профиль', 'btn outline')}<button class="btn outline" id="copy-profile">Копировать ссылку</button></div><form id="username-form">${field('@username', 'username', user.username, { required: true, max: 31, autocomplete: 'username', hint: '3–30 символов: латиница, цифры и _. Начните с буквы. После смены старые ссылки с ником перестанут работать.' })}<p class="error" id="username-error" role="alert" tabindex="-1" hidden></p><button class="btn" type="submit">Сохранить ник</button></form><p class="error" id="logout-error" role="alert" tabindex="-1" hidden></p><button class="btn outline danger" id="logout">Выйти из аккаунта ↗</button></div></section>`, bind() {
-    const form = document.querySelector('#username-form');
-    form.oninput = () => ctx.setDirty?.(true);
-    form.onsubmit = async event => {
-      event.preventDefault();
-      if (form.getAttribute('aria-busy') === 'true') return;
-      const username = form.elements.username.value;
-      busy(form, true); ctx.setSaving?.(true);
-      document.querySelector('#username-error').hidden = true;
-      try {
-        await ctx.auth.changeUsername(username);
-        if (ctx.isCurrent()) { ctx.setDirty?.(false); ctx.toast('Ник сохранён'); ctx.refresh(); }
-      } catch (error) {
-        if (ctx.isCurrent()) {
-          const el = document.querySelector('#username-error');
-          if (error.problem?.code === 'username_taken') { el.hidden = false; el.textContent = 'Этот @username уже занят. Выберите другой.'; el.focus(); }
-          else showError(el, error);
-        }
-      } finally { busy(form, false); ctx.setSaving?.(false); }
-    };
-    document.querySelector('#copy-profile').onclick = () => copyAddress(`${location.origin}/#${profilePath(ctx.auth.user.username)}`, ctx);
-    document.querySelector('#logout').onclick = async event => {
-      const button = event.currentTarget; button.disabled = true;
-      try { await ctx.auth.logout(); if (ctx.isCurrent()) { ctx.setDirty?.(false); ctx.navigate('/'); } }
-      catch (error) { if (ctx.isCurrent()) showError(document.querySelector('#logout-error'), error); }
-      finally { button.disabled = false; }
-    };
-  } };
+  return accountSettings(ctx);
 }
 
 export function notFound(shared = false) {
