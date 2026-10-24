@@ -15,6 +15,8 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         {
             EmailNotConfirmedException => StatusCodes.Status403Forbidden,
             InvalidConfirmationTokenException => StatusCodes.Status400BadRequest,
+            InvalidCurrentPasswordException => StatusCodes.Status400BadRequest,
+            InvalidEmailChangeTokenException => StatusCodes.Status400BadRequest,
             InvalidPasswordResetTokenException => StatusCodes.Status400BadRequest,
             ConfirmationTooFrequentException => StatusCodes.Status429TooManyRequests,
             EmailDeliveryException => StatusCodes.Status503ServiceUnavailable,
@@ -46,6 +48,9 @@ public sealed class ApiExceptionHandler : IExceptionHandler
         context.Response.StatusCode = status;
         var code = exception switch
         {
+            InvalidCurrentPasswordException => "invalid_current_password",
+            InvalidEmailChangeTokenException => "invalid_email_change_token",
+            AccountConflictException => "email_taken",
             UsernameConflictException => "username_taken",
             EmailNotConfirmedException => "email_not_confirmed",
             InvalidConfirmationTokenException => "invalid_confirmation_token",

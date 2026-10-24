@@ -13,6 +13,7 @@ public static class AuthEndpoints
     public static void MapAuthEndpoints(this WebApplication app)
     {
         var auth = app.MapGroup("/api/auth");
+        auth.MapAccountSettingsEndpoints();
         auth.MapPatch("/me/username", async (UsernameRequest request, HttpContext context, AccountService accounts,
             IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
         {

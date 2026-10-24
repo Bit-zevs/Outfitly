@@ -3,8 +3,13 @@ namespace Outfitly.Application.Authentication;
 public sealed class Account
 {
     public Guid UserId { get; init; }
-    public string Email { get; init; } = null!;
-    public string NormalizedEmail { get; init; } = null!;
+    public string Email { get; set; } = null!;
+    public string NormalizedEmail { get; set; } = null!;
+    public string? PendingEmail { get; set; }
+    public string? PendingNormalizedEmail { get; set; }
+    public string? EmailChangeTokenHash { get; set; }
+    public DateTime? EmailChangeIssuedAtUtc { get; set; }
+    public DateTime? EmailChangeExpiresAtUtc { get; set; }
     public string PasswordHash { get; set; } = null!;
     public bool EmailConfirmed { get; set; }
     public string? ConfirmationTokenHash { get; set; }
@@ -25,7 +30,7 @@ public sealed class LoginSession
     public bool IsRevoked { get; set; }
 }
 
-public sealed record AccountView(Guid Id, string Email, string DisplayName, string Username);
+public sealed record AccountView(Guid Id, string Email, string DisplayName, string Username, string? PendingEmail = null);
 public sealed record LoginResult(AccountView User, LoginSession Session);
 
 public sealed class AccountConflictException(Exception? inner = null)
@@ -33,3 +38,6 @@ public sealed class AccountConflictException(Exception? inner = null)
 
 public sealed class UsernameConflictException(Exception? inner = null)
     : Exception("This username is already taken.", inner);
+
+public sealed class InvalidCurrentPasswordException : Exception;
+public sealed class InvalidEmailChangeTokenException : Exception;

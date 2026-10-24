@@ -51,11 +51,14 @@ public sealed class SmtpConfirmationEmailSender : IConfirmationEmailSender
             options.Validate();
             var origin = new Uri(options.PublicUrl);
             var reset = email.Purpose == AccountEmailPurpose.PasswordReset;
-            var route = reset ? "reset-password" : "confirm-email";
+            var change = email.Purpose == AccountEmailPurpose.EmailChange;
+            var route = change ? "confirm-email-change" : reset ? "reset-password" : "confirm-email";
             var link = $"{origin.GetLeftPart(UriPartial.Authority)}/#/{route}?token={Uri.EscapeDataString(email.Token)}";
-            var title = reset ? "Сброс пароля" : "Подтверждение почты";
-            var action = reset ? "Сбросить пароль" : "Подтвердить почту";
-            var notice = reset
+            var title = change ? "Смена электронной почты" : reset ? "Сброс пароля" : "Подтверждение почты";
+            var action = change ? "Подтвердить новый адрес" : reset ? "Сбросить пароль" : "Подтвердить почту";
+            var notice = change
+                ? "Ссылка действует 24 часа. Если вы не запрашивали смену почты, проигнорируйте письмо. После подтверждения потребуется повторный вход."
+                : reset
                 ? "Ссылка действует 1 час. Если вы не запрашивали сброс пароля, проигнорируйте письмо."
                 : "Ссылка действует 24 часа. Если вы не регистрировались, проигнорируйте письмо.";
             var safeLink = WebUtility.HtmlEncode(link);

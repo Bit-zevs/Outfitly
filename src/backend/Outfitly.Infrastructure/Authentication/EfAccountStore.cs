@@ -7,6 +7,11 @@ namespace Outfitly.Infrastructure.Authentication;
 
 public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
 {
+    public Task<Account?> FindAccountAsync(Guid userId, CancellationToken cancellationToken) =>
+        context.Accounts.SingleOrDefaultAsync(account => account.UserId == userId, cancellationToken);
+
+    public Task<Account?> FindByEmailChangeHashAsync(string hash, CancellationToken cancellationToken) =>
+        context.Accounts.SingleOrDefaultAsync(account => account.EmailChangeTokenHash == hash, cancellationToken);
     public Task<User?> FindUserAsync(Guid userId, CancellationToken cancellationToken) =>
         context.Users.SingleOrDefaultAsync(user => user.Id == userId, cancellationToken);
 

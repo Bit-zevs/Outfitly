@@ -13,7 +13,12 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
         builder.HasKey(account => account.UserId);
         builder.Property(account => account.UserId).ValueGeneratedNever();
         builder.Property(account => account.Email).HasMaxLength(254).IsRequired();
-        builder.Property(account => account.NormalizedEmail).HasMaxLength(254).IsRequired();
+        builder.Property(account => account.NormalizedEmail).HasMaxLength(254).IsRequired().IsConcurrencyToken();
+        builder.Property(account => account.SessionVersion).IsConcurrencyToken();
+        builder.Property(account => account.PendingEmail).HasMaxLength(254);
+        builder.Property(account => account.PendingNormalizedEmail).HasMaxLength(254);
+        builder.Property(account => account.EmailChangeTokenHash).HasMaxLength(64).IsConcurrencyToken();
+        builder.HasIndex(account => account.EmailChangeTokenHash).IsUnique();
         builder.Property(account => account.PasswordHash).IsRequired().IsConcurrencyToken();
         builder.Property(account => account.PasswordResetTokenHash).HasMaxLength(64).IsConcurrencyToken();
         builder.HasIndex(account => account.PasswordResetTokenHash).IsUnique();

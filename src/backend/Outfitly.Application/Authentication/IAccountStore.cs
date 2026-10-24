@@ -4,6 +4,8 @@ namespace Outfitly.Application.Authentication;
 
 public interface IAccountStore
 {
+    Task<Account?> FindAccountAsync(Guid userId, CancellationToken cancellationToken);
+    Task<Account?> FindByEmailChangeHashAsync(string hash, CancellationToken cancellationToken);
     Task<User?> FindUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<bool> UsernameExistsAsync(string username, Guid exceptUserId, CancellationToken cancellationToken);
     Task<Account?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken);
