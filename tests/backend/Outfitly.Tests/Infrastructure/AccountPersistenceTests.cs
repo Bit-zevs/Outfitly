@@ -18,8 +18,9 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
-            await service.RegisterAsync("alice@example.com", password, "Alice");
+            var registered = await service.RegisterAsync("alice@example.com", password, "Alice");
             await write.SaveChangesAsync();
+            await service.ConfirmEmailAsync(registered.Confirmation.Token);
             (await write.Accounts.SingleAsync()).PasswordHash = oldHash;
             await write.SaveChangesAsync();
         }

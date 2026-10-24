@@ -28,6 +28,10 @@ if (photoRelativePath == "." || (!Path.IsPathRooted(photoRelativePath) && photoR
 builder.Services.AddSingleton<IPhotoStore>(provider => new Outfitly.Infrastructure.Photos.LocalPhotoStore(
     photoRoot, provider.GetRequiredService<ILogger<Outfitly.Infrastructure.Photos.LocalPhotoStore>>()));
 builder.Services.AddScoped<AccountService>();
+var emailOptions = new Outfitly.Infrastructure.Authentication.SmtpConfirmationOptions();
+builder.Configuration.GetSection("EmailConfirmation").Bind(emailOptions);
+builder.Services.AddSingleton(emailOptions);
+builder.Services.AddScoped<IConfirmationEmailSender, Outfitly.Infrastructure.Authentication.SmtpConfirmationEmailSender>();
 builder.Services.AddScoped<SessionCookieEvents>();
 builder.Services.AddDataProtection().SetApplicationName("Outfitly");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>

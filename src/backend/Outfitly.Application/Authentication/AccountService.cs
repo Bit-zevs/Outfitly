@@ -1,4 +1,6 @@
 using System.Net.Mail;
+using System.Security.Cryptography;
+using System.Text;
 using Outfitly.Domain;
 
 namespace Outfitly.Application.Authentication;
@@ -6,7 +8,7 @@ namespace Outfitly.Application.Authentication;
 // Prepares changes only; the HTTP boundary commits before issuing a cookie.
 public sealed class AccountService(IAccountStore store, IAccountPasswordHasher passwords, TimeProvider clock)
 {
-    public async Task<AccountView> RegisterAsync(string email, string password, string displayName,
+    public async Task<RegisteredAccount> RegisterAsync(string email, string password, string displayName,
         CancellationToken cancellationToken = default)
     {
         var address = Email(email);
@@ -15,12 +17,75 @@ public sealed class AccountService(IAccountStore store, IAccountPasswordHasher p
         var user = new User(Guid.NewGuid(), displayName);
         if (await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken) is not null)
             throw new AccountConflictException();
-        store.Add(user, new Account
+        var account = new Account
         {
             UserId = user.Id, Email = address, NormalizedEmail = address.ToUpperInvariant(),
             PasswordHash = passwords.Hash(password)
-        });
-        return new AccountView(user.Id, address, user.DisplayName);
+        };
+        var confirmation = IssueConfirmation(account);
+        store.Add(user, account);
+        return new RegisteredAccount(user.Id, address, user.DisplayName, confirmation);
+    }
+
+    public async Task<ConfirmationEmail?> ResendConfirmationAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var account = await store.FindByEmailAsync(Email(email).ToUpperInvariant(), cancellationToken);
+        if (account is null || account.EmailConfirmed) return null;
+        if (account.ConfirmationIssuedAtUtc is { } issued && issued.AddSeconds(60) > clock.GetUtcNow().UtcDateTime)
+            throw new ConfirmationTooFrequentException();
+        return IssueConfirmation(account);
+    }
+
+    public async Task ConfirmEmailAsync(string token, CancellationToken cancellationToken = default)
+    {
+        if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
+            throw new InvalidConfirmationTokenException();
+        var account = await store.FindByConfirmationHashAsync(TokenHash(token), cancellationToken);
+        if (account is null || account.EmailConfirmed || account.ConfirmationExpiresAtUtc is not { } expires ||
+            expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidConfirmationTokenException();
+        account.EmailConfirmed = true;
+        account.ConfirmationTokenHash = null;
+        account.ConfirmationExpiresAtUtc = null;
+    }
+
+    private ConfirmationEmail IssueConfirmation(Account account)
+    {
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        account.ConfirmationTokenHash = TokenHash(token);
+        account.ConfirmationIssuedAtUtc = clock.GetUtcNow().UtcDateTime;
+        account.ConfirmationExpiresAtUtc = account.ConfirmationIssuedAtUtc.Value.AddHours(24);
+        return new ConfirmationEmail(account.Email, token);
+    }
+
+    private static string TokenHash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    public async Task<ConfirmationEmail?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var account = await store.FindByEmailAsync(Email(email).ToUpperInvariant(), cancellationToken);
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (account is null || !account.EmailConfirmed ||
+            account.PasswordResetIssuedAtUtc is { } issued && issued.AddMinutes(1) > now) return null;
+        var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        account.PasswordResetTokenHash = TokenHash(token);
+        account.PasswordResetIssuedAtUtc = now;
+        account.PasswordResetExpiresAtUtc = now.AddHours(1);
+        return new ConfirmationEmail(account.Email, token, AccountEmailPurpose.PasswordReset);
+    }
+
+    public async Task ResetPasswordAsync(string token, string password, CancellationToken cancellationToken = default)
+    {
+        if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
+            throw new InvalidPasswordResetTokenException();
+        if (password is null || password.Length is < 8 or > 128)
+            throw new ArgumentException("Password must contain between 8 and 128 characters.");
+        var account = await store.FindByPasswordResetHashAsync(TokenHash(token), cancellationToken);
+        if (account is null || !account.EmailConfirmed || account.PasswordResetExpiresAtUtc is not { } expires ||
+            expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidPasswordResetTokenException();
+        account.PasswordHash = passwords.Hash(password);
+        account.SessionVersion = Guid.NewGuid();
+        account.PasswordResetTokenHash = null;
+        account.PasswordResetExpiresAtUtc = null;
+        await store.RevokeSessionsAsync(account.UserId, cancellationToken);
     }
 
     public async Task<LoginResult?> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
@@ -32,12 +97,16 @@ public sealed class AccountService(IAccountStore store, IAccountPasswordHasher p
         var verification = passwords.Verify(account?.PasswordHash, password);
         if (account is null || verification == PasswordCheck.Failed)
             return null;
+        if (!account.EmailConfirmed) throw new EmailNotConfirmedException();
         var user = await store.GetUserAsync(account.UserId, cancellationToken);
         if (user is null) return null;
         if (verification == PasswordCheck.RehashNeeded) account.PasswordHash = passwords.Hash(password);
+        // Include the account in the commit so a concurrent reset cannot create a session using the old password.
+        store.MarkCredentialsChecked(account);
         var session = new LoginSession
         {
-            Id = Guid.NewGuid(), UserId = user.Id, ExpiresAtUtc = clock.GetUtcNow().UtcDateTime.AddHours(8)
+            Id = Guid.NewGuid(), UserId = user.Id, ExpiresAtUtc = clock.GetUtcNow().UtcDateTime.AddHours(8),
+            SessionVersion = account.SessionVersion
         };
         store.Add(session);
         return new LoginResult(user, session);

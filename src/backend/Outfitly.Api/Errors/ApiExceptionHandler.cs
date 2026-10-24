@@ -13,6 +13,11 @@ public sealed class ApiExceptionHandler : IExceptionHandler
     {
         var status = exception switch
         {
+            EmailNotConfirmedException => StatusCodes.Status403Forbidden,
+            InvalidConfirmationTokenException => StatusCodes.Status400BadRequest,
+            InvalidPasswordResetTokenException => StatusCodes.Status400BadRequest,
+            ConfirmationTooFrequentException => StatusCodes.Status429TooManyRequests,
+            EmailDeliveryException => StatusCodes.Status503ServiceUnavailable,
             PhotoTooLargeException => StatusCodes.Status413PayloadTooLarge,
             UnsupportedPhotoException => StatusCodes.Status415UnsupportedMediaType,
             BadHttpRequestException bad => bad.StatusCode,
@@ -33,14 +38,27 @@ public sealed class ApiExceptionHandler : IExceptionHandler
             409 => "The operation conflicts with the current state",
             413 => "Photo is too large",
             415 => "Unsupported photo format",
+            429 => "Too many account requests",
+            503 => "Email delivery unavailable",
             _ => "An unexpected error occurred"
         };
         context.Response.StatusCode = status;
+        var code = exception switch
+        {
+            EmailNotConfirmedException => "email_not_confirmed",
+            InvalidConfirmationTokenException => "invalid_confirmation_token",
+            InvalidPasswordResetTokenException => "invalid_password_reset_token",
+            ConfirmationTooFrequentException => "confirmation_too_frequent",
+            EmailDeliveryException => "email_delivery_failed",
+            _ => null
+        };
+        if (exception is ConfirmationTooFrequentException) context.Response.Headers.RetryAfter = "60";
         await context.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Status = status,
             Title = title,
-            Detail = status == 400 || exception is WardrobeConcurrencyException ? exception.Message : null
+            Detail = exception is ArgumentException || exception is WardrobeConcurrencyException ? exception.Message : null,
+            Extensions = code is null ? [] : new Dictionary<string, object?> { ["code"] = code }
         }, options: null, contentType: "application/problem+json", cancellationToken: cancellationToken);
         return true;
     }

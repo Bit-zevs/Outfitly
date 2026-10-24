@@ -5,6 +5,10 @@ namespace Outfitly.Application.Authentication;
 public interface IAccountStore
 {
     Task<Account?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken);
+    Task<Account?> FindByConfirmationHashAsync(string hash, CancellationToken cancellationToken);
+    Task<Account?> FindByPasswordResetHashAsync(string hash, CancellationToken cancellationToken);
+    Task RevokeSessionsAsync(Guid userId, CancellationToken cancellationToken);
+    void MarkCredentialsChecked(Account account);
     Task<AccountView?> GetUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<LoginSession?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken);
     void Add(User user, Account account);

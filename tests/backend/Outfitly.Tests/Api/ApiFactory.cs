@@ -14,6 +14,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Outfitly.Domain;
+using Outfitly.Application.Authentication;
 using Outfitly.Infrastructure.Persistence;
 
 namespace Outfitly.Tests.Api;
@@ -22,6 +23,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
     Action<DbContextOptionsBuilder>? configureDatabase = null, bool frontend = false) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection connection = new("Data Source=:memory:;Foreign Keys=True");
+    internal RecordingConfirmationSender Mail { get; } = new();
     internal string PhotoRoot { get; } = Path.Combine(Path.GetTempPath(), $"outfitly-photos-{Guid.NewGuid():N}");
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -40,6 +42,8 @@ internal sealed class ApiFactory(bool testAuthentication = true,
         connection.Open();
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<IConfirmationEmailSender>();
+            services.AddSingleton<IConfirmationEmailSender>(Mail);
             services.RemoveAll<DbContextOptions<OutfitlyDbContext>>();
             services.RemoveAll<IDbContextOptionsConfiguration<OutfitlyDbContext>>();
             services.AddDbContext<OutfitlyDbContext>(options =>
@@ -70,6 +74,17 @@ internal sealed class ApiFactory(bool testAuthentication = true,
     {
         using var scope = Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Database.EnsureCreatedAsync();
+    }
+
+    internal async Task ConfirmEmailAsync(HttpClient client, string email)
+    {
+        using var scope = Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+        var confirmed = await db.Accounts.Where(a => a.NormalizedEmail == email.Trim().ToUpperInvariant())
+            .Select(a => (bool?)a.EmailConfirmed).SingleOrDefaultAsync();
+        if (confirmed != false) return;
+        await SetCsrfAsync(client);
+        (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = Mail.Emails[email.Trim()].Token })).EnsureSuccessStatusCode();
     }
 
     internal async Task<HttpClient> OwnerClientAsync(Guid id)
