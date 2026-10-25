@@ -10,6 +10,8 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
   const request = (suffix, options, query) => ctx.api.request(path(suffix, query), options);
   const active = () => ctx.isCurrent() && root.isConnected;
   let stats;
+  let statsRequest = 0;
+  let likePending = false;
   root.innerHTML = '<h2>Обсуждение</h2><div class="engagement-stats"></div><p class="error" role="alert" tabindex="-1" hidden></p><div class="comment-compose"></div><div class="comment-list"></div>';
   const error = root.querySelector('.error');
   const fail = e => { if (active()) { error.textContent = errorMessage(e); error.hidden = false; } };
@@ -18,12 +20,30 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
     try { await operation(); } catch (e) { fail(e); } finally { if (active()) button.disabled = false; }
   }
   async function loadStats() {
+    const requestId = ++statsRequest;
     const value = await request('/engagement');
-    if (!active()) return;
+    if (!active() || requestId !== statsRequest) return;
     stats = value;
     root.querySelector('.engagement-stats').innerHTML = `<p>Просмотры: ${value.views} · Лайки: ${value.likes} · Комментарии: ${value.comments}</p>${value.canInteract ? `<button class="btn outline small" aria-pressed="${value.isLiked}" id="post-like">${value.isLiked ? 'Убрать лайк' : 'Нравится'}</button>` : '<p><a href="#/login">Войдите с подтверждённой почтой</a>, чтобы участвовать в обсуждении.</p>'}`;
     const like = root.querySelector('#post-like');
-    if (like) like.onclick = () => action(like, async () => { await request('/like', { method: stats.isLiked ? 'DELETE' : 'PUT' }); await loadStats(); });
+    if (like) {
+      like.disabled = likePending;
+      like.onclick = async () => {
+        if (likePending) return;
+        likePending = true;
+        ++statsRequest; // Discard snapshots started before this mutation.
+        try {
+          await action(like, async () => {
+            await request('/like', { method: value.isLiked ? 'DELETE' : 'PUT' });
+            await loadStats();
+          });
+        } finally {
+          likePending = false;
+          const currentLike = active() && root.querySelector('#post-like');
+          if (currentLike) currentLike.disabled = false;
+        }
+      };
+    }
   }
   function compose(container, { parentId = null, comment = null, complete } = {}) {
     const form = document.createElement('form');
@@ -33,11 +53,11 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
     if (comment || parentId) form.querySelector('[type=button]').onclick = () => form.remove();
     else form.querySelector('[type=button]').remove();
     let submitting = false;
-    form.onsubmit = event => { event.preventDefault(); if (submitting) return; submitting = true; const button = form.querySelector('[type=submit]'); action(button, async () => {
+    form.onsubmit = event => { event.preventDefault(); if (submitting) return; submitting = true; form.setAttribute('aria-busy', 'true'); form.querySelectorAll('textarea, button').forEach(control => { control.disabled = true; }); const button = form.querySelector('[type=submit]'); action(button, async () => {
       await request(comment ? `/comments/${comment.id}` : '/comments', { method: comment ? 'PATCH' : 'POST', body: { text: input.value, parentId } });
       if (!active()) return;
       input.value = ''; await complete(); await loadStats();
-    }).finally(() => { submitting = false; }); };
+    }).finally(() => { submitting = false; form.removeAttribute('aria-busy'); form.querySelectorAll('textarea, button').forEach(control => { control.disabled = false; }); }); };
     container.append(form);
   }
   async function loadComments(container, parentId = null, page = 1) {
