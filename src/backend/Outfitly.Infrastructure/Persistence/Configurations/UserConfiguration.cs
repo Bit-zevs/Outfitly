@@ -13,6 +13,8 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.Id).ValueGeneratedNever();
         builder.Property(user => user.DisplayName).IsRequired();
         builder.Property(user => user.Username).HasMaxLength(30).IsRequired();
+        builder.Property(user => user.Bio).HasMaxLength(500);
+        builder.Property(user => user.AvatarStorageKey).IsConcurrencyToken();
         builder.HasIndex(user => user.Username).IsUnique();
     }
 }

@@ -6,17 +6,19 @@ namespace Outfitly.Application.Authentication;
 public sealed partial class AccountService
 {
     public async Task<AccountView> ChangeProfileAsync(Guid actorId, string displayName, string username,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? bio = null, bool updateBio = false)
     {
         if (actorId == Guid.Empty) throw new UnauthorizedAccessException();
         // Validate both fields and uniqueness before changing the tracked user.
         var validated = new User(actorId, displayName, Usernames.Normalize(username));
+        if (updateBio) validated.SetBio(bio);
         var user = await store.FindUserAsync(actorId, cancellationToken) ?? throw new KeyNotFoundException();
         var account = await GetUserAsync(actorId, cancellationToken) ?? throw new KeyNotFoundException();
         if (await store.UsernameExistsAsync(validated.Username, actorId, cancellationToken)) throw new UsernameConflictException();
+        if (updateBio) user.SetBio(validated.Bio);
         user.Rename(validated.DisplayName);
         user.ChangeUsername(validated.Username);
-        return account with { DisplayName = user.DisplayName, Username = user.Username };
+        return account with { DisplayName = user.DisplayName, Username = user.Username, Bio = user.Bio };
     }
 
     public async Task ChangePasswordAsync(Guid actorId, string currentPassword, string newPassword,

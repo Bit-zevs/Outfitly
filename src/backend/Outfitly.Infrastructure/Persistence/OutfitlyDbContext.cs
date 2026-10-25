@@ -19,6 +19,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
     {
         try { return base.SaveChanges(acceptAllChangesOnSuccess); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
@@ -38,6 +39,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
     {
         try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }

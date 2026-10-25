@@ -30,7 +30,7 @@ public sealed class LoginSession
     public bool IsRevoked { get; set; }
 }
 
-public sealed record AccountView(Guid Id, string Email, string DisplayName, string Username, string? PendingEmail = null);
+public sealed record AccountView(Guid Id, string Email, string DisplayName, string Username, string? PendingEmail = null, string? Bio = null, string? AvatarUrl = null);
 public sealed record LoginResult(AccountView User, LoginSession Session);
 
 public sealed class AccountConflictException(Exception? inner = null)

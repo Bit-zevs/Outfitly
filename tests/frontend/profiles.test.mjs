@@ -96,7 +96,7 @@ test('renaming updates the auth user and refreshed profile links; conflict prese
   await auth.restore();
   const ctx = { auth, isCurrent: () => true, updateHeader() { refreshes++; }, toast() {} };
   mount(t, account(ctx));
-  const form = document.querySelector('form'); form.elements.username.value = 'new_anna';
+  const form = document.querySelector('#profile-form'); form.elements.username.value = 'new_anna';
   await form.onsubmit({ preventDefault });
   assert.match(document.querySelector('#profile-error').textContent, /уже занят/);
   assert.equal(auth.user.username, 'anna');

@@ -2,7 +2,7 @@ import { confirmEmailChangePage } from './account-settings.js';
 import { profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
-import { escape, link } from './components.js';
+import { avatar, escape, link } from './components.js';
 import { itemEditor, outfitEditor } from './editors.js';
 import { account, authPage, dashboard, detail, discover, home, notFound, outfitsPage, wardrobe } from './pages.js';
 import { parseRoute, privateRoute } from './router.js';
@@ -35,7 +35,7 @@ function navigate(path, replace = false) {
 
 function header(route) {
   const nav = auth.user ? [['/dashboard', 'Обзор'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
-  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${escape(auth.user.displayName.slice(0, 1).toUpperCase())}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
+  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${avatar(auth.user)}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); document.querySelector('#primary-nav').classList.toggle('open', open); };
   document.querySelector('#primary-nav').onkeydown = event => { if (event.key === 'Escape') { button.setAttribute('aria-expanded', 'false'); document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
@@ -132,6 +132,7 @@ window.addEventListener('beforeunload', event => { if (dirty || saving) { event.
 document.addEventListener('error', event => {
   if (event.target instanceof HTMLImageElement) {
     const img = event.target;
+    if (img.closest('.user-avatar')) { img.remove(); return; }
     const placeholder = document.createElement('span'); placeholder.className = 'photo-placeholder'; placeholder.textContent = '◇'; placeholder.setAttribute('role', 'img'); placeholder.setAttribute('aria-label', img.alt ? `Фото недоступно: ${img.alt}` : 'Фото недоступно'); img.replaceWith(placeholder);
   }
 }, true);

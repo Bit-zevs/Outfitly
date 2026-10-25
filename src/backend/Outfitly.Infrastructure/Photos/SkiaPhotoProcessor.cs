@@ -4,7 +4,7 @@ using System.Buffers.Binary;
 
 namespace Outfitly.Infrastructure.Photos;
 
-public sealed class SkiaPhotoProcessor : IPhotoProcessor
+public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
 {
     public ProcessedPhoto Process(byte[] content, string contentType)
     {
@@ -45,6 +45,24 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor
         using var image = SKImage.FromBitmap(oriented);
         using var encoded = image.Encode(expected, 90);
         return new(encoded.ToArray(), expected == SKEncodedImageFormat.Png ? ".png" : ".jpg");
+    }
+
+    public ProcessedPhoto ProcessAvatar(byte[] content, string contentType, AvatarCrop crop)
+    {
+        var normalized = Process(content, contentType);
+        using var bitmap = SKBitmap.Decode(normalized.Content);
+        if (crop.X < 0 || crop.Y < 0 || crop.Size <= 0 || (long)crop.X + crop.Size > bitmap.Width || (long)crop.Y + crop.Size > bitmap.Height)
+            throw new ArgumentException("Crop must be a square within the oriented image.");
+        using var result = new SKBitmap(512, 512);
+        using (var canvas = new SKCanvas(result))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(bitmap, new SKRect(crop.X, crop.Y, crop.X + crop.Size, crop.Y + crop.Size),
+                new SKRect(0, 0, 512, 512), new SKSamplingOptions(SKFilterMode.Linear));
+        }
+        using var image = SKImage.FromBitmap(result);
+        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
+        return new(encoded.ToArray(), ".png");
     }
 
     private static void ValidatePngChunks(byte[] content)

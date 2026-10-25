@@ -15,12 +15,12 @@ public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicPro
         var total = await users.CountAsync(ct);
         var result = await users.OrderByDescending(user => user.Username == prefix).ThenBy(user => user.Username)
             .Skip((page - 1) * pageSize).Take(pageSize)
-            .Select(user => new PublicUser(user.Id, user.DisplayName, user.Username)).ToArrayAsync(ct);
+            .Select(user => new PublicUser(user.Id, user.DisplayName, user.Username, user.AvatarStorageKey == null ? null : "/api/users/" + user.Id + "/avatar")).ToArrayAsync(ct);
         return new(result, total, page, pageSize);
     }
 
     public Task<PublicUser?> FindAsync(string username, CancellationToken ct) => Users.Where(user => user.Username == username)
-        .Select(user => new PublicUser(user.Id, user.DisplayName, user.Username)).SingleOrDefaultAsync(ct);
+        .Select(user => new PublicUser(user.Id, user.DisplayName, user.Username, user.AvatarStorageKey == null ? null : "/api/users/" + user.Id + "/avatar")).SingleOrDefaultAsync(ct);
 
     private IQueryable<WardrobeItem> Items(Guid ownerId) => context.WardrobeItems.AsNoTracking()
         .Where(item => item.OwnerId == ownerId && item.IsPublic && Users.Any(user => user.Id == item.OwnerId));

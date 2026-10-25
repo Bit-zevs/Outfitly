@@ -61,7 +61,7 @@ public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractio
     private CommentView View(PostInteraction x, Guid? actor, Guid owner)
     {
         var user = store.FindUser(x.UserId);
-        return new(x.Id, new(user.Id, user.DisplayName, user.Username), x.Text, x.ParentId, x.CreatedAt, x.UpdatedAt,
+        return new(x.Id, new(user.Id, user.DisplayName, user.Username, user.AvatarStorageKey == null ? null : $"/api/users/{user.Id}/avatar"), x.Text, x.ParentId, x.CreatedAt, x.UpdatedAt,
             x.IsDeleted, !x.IsDeleted && actor == x.UserId, !x.IsDeleted && (actor == x.UserId || actor == owner));
     }
     public Guid AddComment(Guid id, bool outfit, Guid actor, string? token, string text, Guid? parent)
