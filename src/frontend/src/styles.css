@@ -2200,3 +2200,14 @@ dialog::backdrop {
 .comment-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .comment-replies { margin-left: 1.5rem; }
 .comment-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+.user-avatar { position: relative; display: inline-flex; width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%; overflow: hidden; align-items: center; justify-content: center; background: #e6dfd5; color: #433c35; font-size: 1rem; vertical-align: middle; }
+.user-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.author-line { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+.profile-bio { white-space: pre-wrap; overflow-wrap: anywhere; }
+#avatar-crop canvas { width: 256px; max-width: 100%; border-radius: .5rem; display: block; margin: 1rem 0; background: #eee; }
+#avatar-form input[type=range] { width: 100%; }
+#profile-form textarea { display: block; width: 100%; }
+.header-account .user-avatar { width: 42px; height: 42px; flex-basis: 42px; }
+#public-profile-header .page-head .user-avatar { width: 76px; height: 76px; flex-basis: 76px; font-size: 1.5rem; }
+.linebox > .user-avatar { margin-right: .65rem; }

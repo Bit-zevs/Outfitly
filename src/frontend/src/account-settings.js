@@ -1,12 +1,13 @@
+import { avatarSettings, bindAvatarSettings } from './avatar-settings.js';
 import { ApiError } from './api.js';
 import { passwordConfirmationError } from './auth.js';
-import { escape, field, link, title } from './components.js';
+import { avatar, escape, field, link, title } from './components.js';
 import { profilePath } from './router.js';
 import { copyAddress } from './profiles.js';
 import { busy, showError } from './ui.js';
 
 function identity(user) {
-  return `<h2>${escape(user.displayName)}</h2><p>${escape(user.email)}</p><p>${link(profilePath(user.username), `@${user.username}`)}</p><div class="actions">${link(profilePath(user.username), 'Открыть мой профиль', 'btn outline')}<button class="btn outline" id="copy-profile">Копировать ссылку</button></div>`;
+  return `${avatar(user)}<h2>${escape(user.displayName)}</h2><p>${escape(user.email)}</p><p>${link(profilePath(user.username), `@${user.username}`)}</p><div class="actions">${link(profilePath(user.username), 'Открыть мой профиль', 'btn outline')}<button class="btn outline" id="copy-profile">Копировать ссылку</button></div>`;
 }
 
 const notice = id => `<p class="error" id="${id}-error" role="alert" tabindex="-1" hidden></p><p id="${id}-status" role="status"></p>`;
@@ -14,9 +15,10 @@ const passwordField = (label, name, autocomplete = 'current-password') => field(
 
 export function accountSettings(ctx) {
   const user = ctx.auth.user;
+  let avatarCleanup;
   return { title: 'Мой аккаунт', html: `<section class="account">${title('Личные данные', 'Мой аккаунт', 'Управляйте профилем и данными для входа.')}
     <div class="account-panel" id="account-identity">${identity(user)}</div>
-    <section class="account-panel"><h2>Имя и @username</h2><form id="profile-form">${field('Отображаемое имя', 'displayName', user.displayName, { required: true, autocomplete: 'name' })}${field('@username', 'username', user.username, { required: true, max: 31, autocomplete: 'username', hint: '3–30 символов: латиница, цифры и _. Начните с буквы. После смены ника старые ссылки с ним перестанут работать.' })}${notice('profile')}<button class="btn" type="submit">Сохранить профиль</button></form></section>
+    ${avatarSettings(user)}<section class="account-panel"><h2>Имя и @username</h2><form id="profile-form">${field('Отображаемое имя', 'displayName', user.displayName, { required: true, autocomplete: 'name' })}${field('@username', 'username', user.username, { required: true, max: 31, autocomplete: 'username', hint: '3–30 символов: латиница, цифры и _. Начните с буквы. После смены ника старые ссылки с ним перестанут работать.' })}<label>Описание профиля<textarea name="bio" maxlength="500" rows="4">${escape(user.bio || '')}</textarea></label><p class="muted" id="bio-count">${(user.bio || '').length}/500</p>${notice('profile')}<button class="btn" type="submit">Сохранить профиль</button></form></section>
     <section class="account-panel"><h2>Электронная почта</h2><p>Текущий адрес: <span id="current-email">${escape(user.email)}</span></p><p>До подтверждения нового адреса работает старый. После подтверждения потребуется войти снова на всех устройствах.</p><p id="pending-email" role="status"></p><form id="email-form">${field('Новый email', 'email', user.pendingEmail || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${passwordField('Текущий пароль', 'emailCurrentPassword')}${notice('email')}<button class="btn" type="submit">Отправить подтверждение</button></form><button class="btn outline" id="cancel-email-change" hidden>Отменить смену почты</button></section>
     <section class="account-panel"><h2>Пароль</h2><p>После смены пароля потребуется войти снова на всех устройствах.</p><form id="password-form">${passwordField('Текущий пароль', 'currentPassword')}${passwordField('Новый пароль', 'newPassword', 'new-password')}${passwordField('Повторите новый пароль', 'passwordConfirmation', 'new-password')}<label class="check-label"><input type="checkbox" id="show-settings-passwords">Показать пароли</label>${notice('password')}<button class="btn" type="submit">Изменить пароль</button></form></section>
     <div class="account-panel"><p class="error" id="logout-error" role="alert" tabindex="-1" hidden></p><button class="btn outline danger" id="logout">Выйти из аккаунта ↗</button></div></section>`, bind() {
@@ -35,6 +37,12 @@ export function accountSettings(ctx) {
         ctx.updateHeader?.();
       }
       updateIdentity();
+      const bioInput = forms[0].elements.bio;
+      bioInput.addEventListener('input', () => { document.querySelector('#bio-count').textContent = `${bioInput.value.length}/500`; });
+      const avatarDirty = {};
+      avatarCleanup = bindAvatarSettings(ctx, { canSave: () => !saving,
+        setSaving: value => { saving = value; ctx.setSaving?.(value); },
+        setDirty: value => { if (value) dirty.add(avatarDirty); else dirty.delete(avatarDirty); ctx.setDirty?.(dirty.size > 0); }, updateIdentity });
 
       async function submit(id, action) {
         if (saving) { ctx.toast('Дождитесь окончания сохранения.'); return; }
@@ -60,9 +68,10 @@ export function accountSettings(ctx) {
         event.preventDefault();
         const form = forms[0];
         return submit('profile', async () => {
-          const updated = await ctx.auth.changeProfile(form.elements.displayName.value, form.elements.username.value);
+          const updated = await ctx.auth.changeProfile(form.elements.displayName.value, form.elements.username.value, form.elements.bio.value);
           if (!ctx.isCurrent()) return;
-          form.elements.displayName.value = updated.displayName; form.elements.username.value = updated.username;
+          form.elements.displayName.value = updated.displayName; form.elements.username.value = updated.username; form.elements.bio.value = updated.bio === undefined ? form.elements.bio.value : updated.bio || '';
+          document.querySelector('#bio-count').textContent = `${form.elements.bio.value.length}/500`;
           markClean(form); updateIdentity(); document.querySelector('#profile-status').textContent = 'Профиль сохранён.';
         });
       };
@@ -102,7 +111,7 @@ export function accountSettings(ctx) {
         catch (error) { if (ctx.isCurrent()) showError(document.querySelector('#logout-error'), error); }
         finally { button.disabled = false; }
       };
-    } };
+    }, cleanup() { avatarCleanup?.(); } };
 }
 
 export function confirmEmailChangePage(ctx) {

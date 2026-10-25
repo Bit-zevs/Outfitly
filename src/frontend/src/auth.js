@@ -28,8 +28,18 @@ export function createAuth(api) {
       user = await api.request('/auth/me/username', { method: 'PATCH', body: { username } });
       return user;
     },
-    async changeProfile(displayName, username) {
-      user = await api.request('/auth/me/profile', { method: 'PATCH', body: { displayName, username } });
+    async changeProfile(displayName, username, bio) {
+      user = await api.request('/auth/me/profile', { method: 'PATCH', body: { displayName, username, ...(bio !== undefined ? { bio } : {}) } });
+      return user;
+    },
+    async uploadAvatar(data) {
+      await api.request('/auth/me/avatar', { method: 'PUT', body: data });
+      if (user) user = { ...user, avatarUrl: `/api/users/${user.id}/avatar?v=${Date.now()}` };
+      return user;
+    },
+    async deleteAvatar() {
+      await api.request('/auth/me/avatar', { method: 'DELETE' });
+      if (user) user = { ...user, avatarUrl: null };
       return user;
     },
     async changePassword(currentPassword, newPassword) {

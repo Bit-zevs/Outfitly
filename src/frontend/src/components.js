@@ -35,3 +35,11 @@ export function pagination(route, page) {
   const address = number => { const q = new URLSearchParams(route.query); q.set('page', String(number)); return `${route.path}?${q}`; };
   return `<nav class="pagination" aria-label="Страницы каталога">${page.page > 1 ? link(address(page.page - 1), '← Назад', 'btn outline') : ''}<span>Страница ${page.page} из ${Math.max(1, pages)}</span>${page.page < pages ? link(address(page.page + 1), 'Далее →', 'btn outline') : ''}</nav>`;
 }
+
+export function avatar(user, className = '') {
+  const name = user.displayName || user.username || '?';
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] || '').join('').toUpperCase();
+  const url = user.avatarUrl;
+  const safe = typeof url === 'string' && /^\/api\/users\//.test(url);
+  return `<span class="user-avatar ${className}" role="img" aria-label="${escape(name)}"><span aria-hidden="true">${escape(initials)}</span>${safe ? `<img src="${escape(url)}" alt="" aria-hidden="true" loading="lazy">` : ''}</span>`;
+}

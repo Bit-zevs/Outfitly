@@ -1,4 +1,4 @@
-import { escape } from './components.js';
+import { avatar, escape } from './components.js';
 import { errorMessage } from './api.js';
 
 export function bindEngagement(ctx, kind, resource, shareToken) {
@@ -67,7 +67,7 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
     container.querySelector(':scope > .load-more')?.remove();
     for (const comment of data.items) {
       const article = document.createElement('article'); article.className = 'post-comment';
-      article.innerHTML = `<p><a href="#/@${encodeURIComponent(comment.author.username)}">@${escape(comment.author.username)}</a> · ${escape(new Date(comment.createdAt).toLocaleString('ru-RU'))}${comment.updatedAt ? ' · изменён' : ''}</p><p class="comment-text">${comment.isDeleted ? 'Комментарий удалён' : escape(comment.text)}</p><div class="comment-actions"></div><div class="comment-editor"></div>${!parentId ? '<div class="comment-replies"></div>' : ''}`;
+      article.innerHTML = `<p class="author-line">${avatar(comment.author)}<a href="#/@${encodeURIComponent(comment.author.username)}">@${escape(comment.author.username)}</a> · ${escape(new Date(comment.createdAt).toLocaleString('ru-RU'))}${comment.updatedAt ? ' · изменён' : ''}</p><p class="comment-text">${comment.isDeleted ? 'Комментарий удалён' : escape(comment.text)}</p><div class="comment-actions"></div><div class="comment-editor"></div>${!parentId ? '<div class="comment-replies"></div>' : ''}`;
       const controls = article.querySelector('.comment-actions');
       const addButton = (label, handler) => { const button = document.createElement('button'); button.className = 'btn outline small'; button.textContent = label; button.onclick = () => handler(button); controls.append(button); };
       const refresh = () => loadComments(container, parentId);
