@@ -27,6 +27,8 @@ test('a late people search cannot overwrite a newer route, and @username detail 
   const requests = [];
   globalThis.fetch = async (url, options) => {
     requests.push(url);
+    if (url.endsWith('/engagement')) return json({ views: 0, likes: 0, comments: 0, canInteract: false });
+    if (url.includes('/comments?')) return json({ items: [], total: 0, pageSize: 20 });
     if (url === '/api/auth/me') return json({}, 401);
     if (url.startsWith('/api/users?')) {
       if (url.includes('search=old')) {
@@ -53,5 +55,5 @@ test('a late people search cannot overwrite a newer route, and @username detail 
   await until(() => document.querySelector('#content').textContent.includes('Named coat'));
   assert.match(document.querySelector('#content').textContent, /@new_person/);
   assert.equal(document.querySelector('#copy-public-address')?.textContent, 'Копировать публичную ссылку');
-  assert.equal(requests.filter(url => url.startsWith('/api/items')).length, 0);
+  assert.equal(requests.filter(url => url.startsWith('/api/items') && !url.endsWith('/engagement') && !url.includes('/comments?')).length, 0);
 });
