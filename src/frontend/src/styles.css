@@ -2193,3 +2193,10 @@ dialog::backdrop {
     scroll-behavior: auto!important;
   }
 }
+
+#engagement { margin-top: 2rem; }
+.comment-form textarea { display: block; width: 100%; margin: .5rem 0; }
+.post-comment { padding: 1rem 0; border-bottom: 1px solid var(--border, #ddd); }
+.comment-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-replies { margin-left: 1.5rem; }
+.comment-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
