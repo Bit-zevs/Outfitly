@@ -63,3 +63,15 @@ public sealed class PostgreSqlEngagementTests
         await using var fresh = database.Open(); Assert.Empty(await fresh.Set<PostInteraction>().ToArrayAsync());
     }
 }
+
+public sealed class PostgreSqlEngagementDeletionTests
+{
+    [PostgreSqlFact]
+    public async Task Deleted_item_is_a_conflict_in_migrated_PostgreSQL()
+    {
+        await using var database = await PostgreSqlDatabase.CreateAsync();
+        foreach (var kind in new[] { "view", "like", "comment" })
+        foreach (var synchronous in new[] { false, true })
+            await EngagementDeletionScenario.Run(database.Open, kind, synchronous);
+    }
+}
