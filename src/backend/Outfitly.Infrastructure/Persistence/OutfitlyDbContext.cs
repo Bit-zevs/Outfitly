@@ -18,6 +18,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         try { return base.SaveChanges(acceptAllChangesOnSuccess); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
@@ -27,6 +28,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         CancellationToken cancellationToken = default)
     {
         try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }

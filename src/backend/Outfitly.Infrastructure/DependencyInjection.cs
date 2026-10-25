@@ -19,6 +19,8 @@ public static class DependencyInjection
         services.AddScoped<IItemCatalogQuery, EfItemCatalogQuery>();
         services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
         services.AddScoped<PublicProfiles>();
+        services.AddScoped<IPostInteractionStore, EfPostInteractionStore>();
+        services.AddScoped<PostEngagement>();
         services.AddSingleton<IPhotoProcessor, Photos.SkiaPhotoProcessor>();
         services.AddScoped<IAccountStore, EfAccountStore>();
         services.AddSingleton<IAccountPasswordHasher, AccountPasswordHasher>();
