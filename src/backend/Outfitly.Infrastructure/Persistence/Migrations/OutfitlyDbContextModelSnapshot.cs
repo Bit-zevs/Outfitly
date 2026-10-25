@@ -281,6 +281,14 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("AvatarStorageKey")
+                        .IsConcurrencyToken()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Bio")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -296,6 +304,24 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("Users", (string)null);
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.UserFollow", b =>
+                {
+                    b.Property<Guid>("FollowerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FollowedId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("FollowerId", "FollowedId");
+
+                    b.HasIndex("FollowedId", "FollowerId");
+
+                    b.ToTable("UserFollows", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_UserFollows_NotSelf", "\"FollowerId\" <> \"FollowedId\"");
+                        });
                 });
 
             modelBuilder.Entity("Outfitly.Domain.WardrobeItem", b =>
@@ -408,6 +434,21 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.UserFollow", b =>
+                {
+                    b.HasOne("Outfitly.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("FollowedId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Outfitly.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("FollowerId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

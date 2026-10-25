@@ -2,7 +2,7 @@ using Outfitly.Domain;
 
 namespace Outfitly.Application;
 
-public sealed record PublicUser(Guid Id, string DisplayName, string Username);
+public sealed record PublicUser(Guid Id, string DisplayName, string Username, string? AvatarUrl = null);
 public sealed record PublicPage<T>(IReadOnlyCollection<T> Items, int Total, int Page, int PageSize);
 
 public interface IPublicProfileQuery

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Outfitly.Api.Authentication;
 using Outfitly.Application;
 using Outfitly.Application.Authentication;
@@ -13,7 +14,7 @@ public static class AccountSettingsEndpoints
         auth.MapPatch("/me/profile", async (ProfileRequest request, HttpContext context, AccountService accounts,
             IUnitOfWork unitOfWork, CancellationToken ct) =>
         {
-            var user = await accounts.ChangeProfileAsync(CurrentActor.Id(context.User), request.DisplayName, request.Username, ct);
+            var user = await accounts.ChangeProfileAsync(CurrentActor.Id(context.User), request.DisplayName, request.Username, ct, request.Bio.ValueKind switch { JsonValueKind.String => request.Bio.GetString(), JsonValueKind.Null or JsonValueKind.Undefined => null, _ => throw new ArgumentException("Invalid bio.") }, request.Bio.ValueKind != JsonValueKind.Undefined);
             await unitOfWork.SaveChangesAsync(ct);
             return Results.Ok(user);
         }).RequireAuthorization(CurrentActor.PolicyName);
@@ -56,7 +57,7 @@ public static class AccountSettingsEndpoints
         }).RequireRateLimiting("account-access");
     }
 
-    public sealed record ProfileRequest(string DisplayName, string Username);
+    public sealed record ProfileRequest(string DisplayName, string Username, JsonElement Bio = default);
     public sealed record PasswordRequest(string CurrentPassword, string NewPassword);
     public sealed record EmailChangeRequest(string Email, string CurrentPassword);
     public sealed record TokenRequest(string Token);

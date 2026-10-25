@@ -1,3 +1,4 @@
+using Outfitly.Api.Authentication;
 using Outfitly.Api.Contracts;
 using Outfitly.Application;
 
@@ -10,7 +11,7 @@ public static class UserEndpoints
         var users = app.MapGroup("/api/users");
         users.MapGet("/", (string? search, int? page, int? pageSize, PublicProfiles profiles, CancellationToken ct) =>
             profiles.SearchAsync(search, page ?? 1, pageSize ?? 20, ct));
-        users.MapGet("/{username}", (string username, PublicProfiles profiles, CancellationToken ct) => profiles.FindAsync(username, ct));
+        users.MapGet("/{username}", (string username, HttpContext http, SocialProfiles profiles, CancellationToken ct) => profiles.ProfileAsync(username, http.User.Identity?.IsAuthenticated == true ? CurrentActor.Id(http.User) : null, ct));
         users.MapGet("/{username}/items", async (string username, int? page, int? pageSize, PublicProfiles profiles, CancellationToken ct) =>
         {
             var result = await profiles.ItemsAsync(username, page ?? 1, pageSize ?? 20, ct);

@@ -37,7 +37,7 @@ public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
         (from account in context.Accounts
          join user in context.Users on account.UserId equals user.Id
          where user.Id == userId && account.EmailConfirmed
-         select new AccountView(user.Id, account.Email, user.DisplayName, user.Username)).SingleOrDefaultAsync(cancellationToken);
+         select new AccountView(user.Id, account.Email, user.DisplayName, user.Username, null, user.Bio, user.AvatarStorageKey == null ? null : "/api/users/" + user.Id + "/avatar")).SingleOrDefaultAsync(cancellationToken);
 
     public Task<LoginSession?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
         context.LoginSessions.SingleOrDefaultAsync(session => session.Id == sessionId &&
