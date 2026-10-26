@@ -154,6 +154,112 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.ToTable("LoginSessions", (string)null);
                 });
 
+            modelBuilder.Entity("Outfitly.Domain.CopyReceipt", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SourceId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("UserId", "OperationId");
+
+                    b.ToTable("CopyReceipts", (string)null);
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.EditorDraft", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ActiveSlot")
+                        .HasColumnType("text");
+
+                    b.Property<string>("BaseVersion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("CompletedId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Data")
+                        .IsRequired()
+                        .HasMaxLength(65536)
+                        .HasColumnType("character varying(65536)");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhotoStorageKey")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "ActiveSlot")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "UpdatedAtUtc", "Id");
+
+                    b.ToTable("EditorDrafts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_EditorDrafts_Kind", "\"Kind\" IN ('items', 'outfits')");
+                        });
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.Favorite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ShareLinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Kind", "TargetId")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Kind", "CreatedAtUtc", "Id");
+
+                    b.ToTable("Favorites", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Favorites_Kind", "\"Kind\" IN ('items', 'outfits')");
+                        });
+                });
+
             modelBuilder.Entity("Outfitly.Domain.Outfit", b =>
                 {
                     b.Property<Guid>("Id")
@@ -359,6 +465,12 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<string>("PhotoUrl")
                         .HasColumnType("text");
 
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.Property<string>("Size")
                         .HasColumnType("text");
 
@@ -398,6 +510,33 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Outfitly.Application.Authentication.LoginSession", b =>
                 {
                     b.HasOne("Outfitly.Application.Authentication.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.CopyReceipt", b =>
+                {
+                    b.HasOne("Outfitly.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.EditorDraft", b =>
+                {
+                    b.HasOne("Outfitly.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Domain.Favorite", b =>
+                {
+                    b.HasOne("Outfitly.Domain.User", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)

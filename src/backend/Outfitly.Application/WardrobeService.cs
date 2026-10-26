@@ -144,14 +144,14 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     {
         var item = Item(itemId);
         RequireOwner(actorId, item.OwnerId);
-        return View(item);
+        return View(item) with { EditVersion = ResourceVersion.For(item) };
     }
 
     public OutfitView GetOutfit(Guid actorId, Guid outfitId)
     {
         var outfit = Outfit(outfitId);
         RequireOwner(actorId, outfit.OwnerId);
-        return View(outfit);
+        return View(outfit) with { EditVersion = ResourceVersion.For(outfit) };
     }
 
     public IReadOnlyCollection<ItemView> GetPublicItems() =>

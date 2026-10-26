@@ -1,3 +1,4 @@
+import { createDraftSession, favoritesPage, draftsPage } from './workspace.js';
 import { confirmEmailChangePage } from './account-settings.js';
 import { profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
@@ -34,7 +35,7 @@ function navigate(path, replace = false) {
 }
 
 function header(route) {
-  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
+  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
   document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${avatar(auth.user)}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); document.querySelector('#primary-nav').classList.toggle('open', open); };
@@ -53,6 +54,8 @@ async function resolve(ctx) {
   if (path === '/wardrobe') return wardrobe(ctx);
   if (path === '/outfits') return outfitsPage(ctx);
   if (path === '/discover') return discover(ctx);
+  if (path === '/favorites') return favoritesPage(ctx);
+  if (path === '/drafts') return draftsPage(ctx);
   if (path === '/account') return account(ctx);
   if (parts[0]?.startsWith('@')) {
     const username = decodeURIComponent(parts[0].slice(1));
@@ -90,7 +93,7 @@ async function render() {
       header(route);
     }
     if (privateRoute(route.path) && !auth.user) { navigate(`/login?return=${encodeURIComponent(route.path + (route.query.size ? `?${route.query}` : ''))}`, true); return; }
-    const ctx = { route, api, auth, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, updateHeader: () => { if (isCurrent()) header(parseRoute(location.hash)); }, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
+    const ctx = { route, api, auth, drafts: createDraftSession, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, updateHeader: () => { if (isCurrent()) header(parseRoute(location.hash)); }, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
     const page = await resolve(ctx);
     if (!isCurrent()) return;
     header(route);
