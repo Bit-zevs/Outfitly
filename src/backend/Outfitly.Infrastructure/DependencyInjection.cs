@@ -19,6 +19,8 @@ public static class DependencyInjection
         services.AddScoped<IItemCatalogQuery, EfItemCatalogQuery>();
         services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
         services.AddScoped<PublicProfiles>();
+        services.AddScoped<IWorkspaceStore, EfWorkspaceStore>();
+        services.AddScoped<WorkspaceService>();
         services.AddScoped<ISocialProfileStore, EfSocialProfileStore>();
         services.AddScoped<SocialProfiles>();
         services.AddScoped<AvatarService>();

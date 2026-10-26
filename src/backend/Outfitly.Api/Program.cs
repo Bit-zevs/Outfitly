@@ -90,6 +90,7 @@ app.MapWardrobeEndpoints();
 app.MapPhotoEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapWorkspaceEndpoints();
 app.MapSocialEndpoints();
 app.MapEngagementEndpoints();
 

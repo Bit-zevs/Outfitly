@@ -20,9 +20,15 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         try { return base.SaveChanges(acceptAllChangesOnSuccess); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
+        catch (DbUpdateException exception) when (HasWorkspaceAddition(exception))
+        {
+            if (WorkspaceCollision(exception)) throw new WardrobeConcurrencyException(exception);
+            throw;
+        }
         catch (DbUpdateException exception) when (HasAddedInteraction(exception))
         {
             using var verification = new OutfitlyDbContext(options);
@@ -40,9 +46,15 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
+        catch (DbUpdateException exception) when (HasWorkspaceAddition(exception))
+        {
+            if (WorkspaceCollision(exception)) throw new WardrobeConcurrencyException(exception);
+            throw;
+        }
         catch (DbUpdateException exception) when (HasAddedInteraction(exception))
         {
             // The failed context is never queried or saved again. Check only the target's
@@ -57,6 +69,22 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
             }
             throw;
         }
+    }
+
+    private static bool HasWorkspaceAddition(DbUpdateException exception) => exception.Entries.Any(entry =>
+        entry.State == EntityState.Added && entry.Entity is Favorite or EditorDraft or CopyReceipt);
+
+    private bool WorkspaceCollision(DbUpdateException exception)
+    {
+        // Verify expected duplicate keys after rollback without querying the failed context.
+        using var clean = new OutfitlyDbContext(options);
+        return exception.Entries.Where(entry => entry.State == EntityState.Added).Any(entry => entry.Entity switch
+        {
+            Favorite f => clean.Set<Favorite>().Any(x => x.UserId == f.UserId && x.Kind == f.Kind && x.TargetId == f.TargetId),
+            EditorDraft d => clean.Set<EditorDraft>().Any(x => x.Id == d.Id || x.UserId == d.UserId && x.ActiveSlot == d.ActiveSlot && d.ActiveSlot != null),
+            CopyReceipt r => clean.Set<CopyReceipt>().Any(x => x.UserId == r.UserId && x.OperationId == r.OperationId),
+            _ => false
+        });
     }
 
     private static bool HasAddedInteraction(DbUpdateException exception) =>
