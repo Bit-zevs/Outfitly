@@ -13,6 +13,12 @@ public sealed class EfWorkspaceStore(OutfitlyDbContext db) : IWorkspaceStore
     public void Add(CopyReceipt x) => db.Add(x);
     public void Remove(Favorite x) => db.Remove(x);
     public void Remove(EditorDraft x) => db.Remove(x);
+    public void MarkItemChanged(WardrobeItem item)
+    {
+        var entry = db.Entry(item);
+        if (entry.State == EntityState.Detached) throw new InvalidOperationException("Read the item in this unit of work before changing it.");
+        entry.Property<Guid>("Revision").CurrentValue = Guid.NewGuid();
+    }
 }
 internal sealed class WorkspaceConfiguration : IEntityTypeConfiguration<Favorite>, IEntityTypeConfiguration<EditorDraft>, IEntityTypeConfiguration<CopyReceipt>
 {

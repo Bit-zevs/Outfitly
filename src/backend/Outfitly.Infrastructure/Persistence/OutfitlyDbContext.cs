@@ -17,7 +17,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
-        try { return base.SaveChanges(acceptAllChangesOnSuccess); }
+        try { PrepareItemRevisions(); return base.SaveChanges(acceptAllChangesOnSuccess); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
@@ -43,7 +43,7 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
         CancellationToken cancellationToken = default)
     {
-        try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
+        try { PrepareItemRevisions(); return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
@@ -69,6 +69,13 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
             }
             throw;
         }
+    }
+
+    private void PrepareItemRevisions()
+    {
+        ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<WardrobeItem>().Where(entry => entry.State == EntityState.Modified))
+            entry.Property<Guid>("Revision").CurrentValue = Guid.NewGuid();
     }
 
     private static bool HasWorkspaceAddition(DbUpdateException exception) => exception.Entries.Any(entry =>

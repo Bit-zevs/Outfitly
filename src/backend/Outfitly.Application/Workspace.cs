@@ -27,6 +27,8 @@ public interface IWorkspaceStore
     void Add(CopyReceipt x);
     void Remove(Favorite x);
     void Remove(EditorDraft x);
+    // Force a version-checked write even when a finalized draft leaves item fields unchanged.
+    void MarkItemChanged(WardrobeItem item);
 }
 public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository wardrobe, WardrobeService commands,
     IPhotoStore files, IPhotoProcessor processor, PhotoChanges changes, TimeProvider clock)
@@ -184,6 +186,7 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
             { changes.RemoveAfterCommit(item.PhotoStorageKey); item.SetUploadedPhoto(d.PhotoStorageKey); }
             else if (content.PhotoMode == "url" && string.IsNullOrEmpty(url) || content.PhotoMode == "file" && content.RemovePhoto) { changes.RemoveAfterCommit(item.PhotoStorageKey); item.RemovePhoto(); }
             if (content.PhotoMode != "file" || content.RemovePhoto) changes.RemoveAfterCommit(d.PhotoStorageKey);
+            if (d.TargetId.HasValue) store.MarkItemChanged(item);
             result = item.Id;
         }
         else
