@@ -2211,3 +2211,12 @@ dialog::backdrop {
 .header-account .user-avatar { width: 42px; height: 42px; flex-basis: 42px; }
 #public-profile-header .page-head .user-avatar { width: 76px; height: 76px; flex-basis: 76px; font-size: 1.5rem; }
 .linebox > .user-avatar { margin-right: .65rem; }
+
+.statistics-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 32px; }
+.statistics-card { padding: 20px; border: 1px solid var(--line, #ddd); border-radius: 12px; display: flex; flex-direction: column; gap: 8px; }
+.statistics-card strong { font-size: 2rem; }
+.statistics-distributions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 28px; margin-bottom: 36px; }
+.statistics-distribution ul { list-style: none; padding: 0; }
+.statistics-distribution li { margin-bottom: 16px; overflow-wrap: anywhere; }
+.statistics-distribution li div { display: flex; justify-content: space-between; gap: 12px; }
+.statistics-distribution meter { display: block; width: 100%; height: 14px; }
