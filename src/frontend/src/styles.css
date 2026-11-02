@@ -2225,3 +2225,12 @@ dialog::backdrop {
 .wardrobe-filters label { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .wardrobe-filters input, .wardrobe-filters select { width: 100%; min-width: 0; }
 .wardrobe-filters .actions { flex-wrap: wrap; }
+
+.calendar-navigation { flex-wrap: wrap; margin-bottom: 24px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-bottom: 32px; }
+.calendar-weekday { text-align: center; padding: 8px 0; }
+.calendar-day { border: 1px solid var(--line, #ddd); border-radius: 8px; min-height: 80px; padding: 10px; display: flex; flex-direction: column; gap: 4px; text-decoration: none; }
+.calendar-day.selected { outline: 2px solid currentColor; background: #eee9df; }
+.calendar-day small { font-size: 10px; }
+.calendar-choice { display: block; margin: 10px 0; width: 100%; overflow-wrap: anywhere; }
+@media(max-width: 600px) { .calendar-grid { gap: 3px; } .calendar-day { padding: 5px; min-height: 65px; } .calendar-navigation h2 { order: -1; width: 100%; } }
