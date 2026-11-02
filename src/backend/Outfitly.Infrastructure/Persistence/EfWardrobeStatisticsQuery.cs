@@ -1,3 +1,4 @@
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Outfitly.Application;
 using Outfitly.Domain;
@@ -8,6 +9,9 @@ public sealed class EfWardrobeStatisticsQuery(OutfitlyDbContext context) : IWard
 {
     public async Task<WardrobeStatisticsView> GetAsync(Guid owner, CancellationToken cancellationToken)
     {
+        // PostgreSQL ReadCommitted takes a new snapshot per statement.
+        await using var transaction = await context.Database.BeginTransactionAsync(
+            context.Database.IsNpgsql() ? IsolationLevel.RepeatableRead : IsolationLevel.Serializable, cancellationToken);
         var items = context.WardrobeItems.AsNoTracking();
         items = items.Where(x => x.OwnerId == owner);
         var outfits = context.Outfits.AsNoTracking().IgnoreAutoIncludes().Where(x => x.OwnerId == owner);
@@ -21,10 +25,12 @@ public sealed class EfWardrobeStatisticsQuery(OutfitlyDbContext context) : IWard
         var reactions = context.Set<PostInteraction>().AsNoTracking();
         var itemReactions = await Reactions(reactions.Where(r => items.Any(i => i.Id == r.ItemId)), cancellationToken);
         var outfitReactions = await Reactions(reactions.Where(r => outfits.Any(o => o.Id == r.OutfitId)), cancellationToken);
-        return new(await items.CountAsync(cancellationToken), await outfits.CountAsync(cancellationToken),
+        var result = new WardrobeStatisticsView(await items.CountAsync(cancellationToken), await outfits.CountAsync(cancellationToken),
             await items.CountAsync(x => x.IsPublic, cancellationToken), await outfits.CountAsync(x => x.IsPublic, cancellationToken),
             unused, Enum.GetValues<ClothingCategory>().Select(c => new CategoryStatistics(c,
                 categories.FirstOrDefault(x => x.Category == c)?.Count ?? 0)).ToArray(), colors, brands, itemReactions, outfitReactions);
+        await transaction.CommitAsync(cancellationToken);
+        return result;
     }
 
     private static async Task<StatisticsGroup[]> Groups(IQueryable<string?> values, CancellationToken token)

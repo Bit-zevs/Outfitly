@@ -332,5 +332,5 @@ UPDATE/DELETE. Завершение черновика через IWorkspaceStor
 
 WardrobeStatistics в Application читает личную статистику через IWardrobeStatisticsQuery.
 EfWardrobeStatisticsQuery выполняет агрегаты в БД, ограничивая вещи, образы и реакции
-владельцем. Запрос не изменяет состояние и не загружает сущности гардероба.
+владельцем. Все агрегаты читаются в одной транзакции RepeatableRead в PostgreSQL (Serializable в SQLite): конкурентные изменения не смешивают снимки отдельных показателей. Запрос не изменяет состояние и не загружает сущности гардероба.
 HTTP-контракт — [API](../src/backend/Outfitly.Api/README.md#личная-статистика-гардероба).
