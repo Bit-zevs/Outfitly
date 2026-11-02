@@ -127,6 +127,7 @@ public sealed class AuthenticationApiTests
         Assert.Equal(HttpStatusCode.Created,
             (await browser.PostAsJsonAsync("/api/outfits", new { name = "Bob's outfit" })).StatusCode);
         using var replay = ReplayClient(factory, aliceCookie.Split(';')[0]);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/wardrobe/statistics")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/auth/me")).StatusCode);
     }
 
@@ -224,6 +225,7 @@ public sealed class AuthenticationApiTests
         }
         if (reason == "forged") cookie = "__Host-Outfitly.Auth=not-a-protected-ticket";
         using var replay = ReplayClient(factory, cookie);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/wardrobe/statistics")).StatusCode);
         var rejected = await replay.GetAsync("/api/items");
         Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
         Assert.Null(rejected.Headers.Location);

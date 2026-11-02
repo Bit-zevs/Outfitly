@@ -17,6 +17,8 @@ public static class DependencyInjection
         services.AddDbContext<OutfitlyDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IWardrobeRepository, EfWardrobeRepository>();
         services.AddScoped<IItemCatalogQuery, EfItemCatalogQuery>();
+        services.AddScoped<IWardrobeStatisticsQuery, EfWardrobeStatisticsQuery>();
+        services.AddScoped<WardrobeStatistics>();
         services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
         services.AddScoped<PublicProfiles>();
         services.AddScoped<IWorkspaceStore, EfWorkspaceStore>();
