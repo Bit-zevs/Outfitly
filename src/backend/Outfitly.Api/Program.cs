@@ -86,6 +86,8 @@ app.UseRateLimiter();
 app.UseMiddleware<CsrfMiddleware>();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+app.MapGet("/api/wardrobe/statistics", (HttpContext http, WardrobeStatistics service, CancellationToken token) =>
+    service.GetAsync(CurrentActor.Id(http.User), token)).RequireAuthorization(CurrentActor.PolicyName);
 app.MapWardrobeEndpoints();
 app.MapPhotoEndpoints();
 app.MapAuthEndpoints();
