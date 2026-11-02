@@ -20,7 +20,7 @@ using Outfitly.Infrastructure.Persistence;
 namespace Outfitly.Tests.Api;
 
 internal sealed class ApiFactory(bool testAuthentication = true,
-    Action<DbContextOptionsBuilder>? configureDatabase = null, bool frontend = false) : WebApplicationFactory<Program>
+    Action<DbContextOptionsBuilder>? configureDatabase = null, bool frontend = false, Guid? supportAdmin = null) : WebApplicationFactory<Program>
 {
     private readonly SqliteConnection connection = new("Data Source=:memory:;Foreign Keys=True");
     internal RecordingConfirmationSender Mail { get; } = new();
@@ -29,6 +29,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        if (supportAdmin is { } admin) builder.UseSetting("Support:AdminUserIds:0", admin.ToString());
         builder.UseSetting("Logging:LogLevel:Default", "None");
         builder.UseSetting("Photos:RootPath", PhotoRoot);
         if (frontend)

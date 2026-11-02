@@ -14,12 +14,12 @@ public static class AuthEndpoints
     {
         var auth = app.MapGroup("/api/auth");
         auth.MapAccountSettingsEndpoints();
-        auth.MapPatch("/me/username", async (UsernameRequest request, HttpContext context, AccountService accounts,
+        auth.MapPatch("/me/username", async (UsernameRequest request, HttpContext context, AccountService accounts, ISupportAdminAccess supportAdmins,
             IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
         {
             var user = await accounts.ChangeUsernameAsync(CurrentActor.Id(context.User), request.Username, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            return Results.Ok(user);
+            return Results.Ok(user with { IsSupportAdmin = supportAdmins.IsAdmin(user.Id) });
         }).RequireAuthorization(CurrentActor.PolicyName);
         auth.MapGet("/csrf", (HttpContext context, IAntiforgery antiforgery) =>
         {
@@ -71,7 +71,7 @@ public static class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/login", async (LoginRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, HttpContext context, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, HttpContext context, ISupportAdminAccess supportAdmins, CancellationToken cancellationToken) =>
         {
             var result = await accounts.LoginAsync(request.Email, request.Password, cancellationToken);
             if (result is null) return Results.Problem(statusCode: 401, title: "Invalid email or password");
@@ -91,7 +91,7 @@ public static class AuthEndpoints
                     IssuedUtc = new DateTimeOffset(result.Session.ExpiresAtUtc).AddHours(-8),
                     ExpiresUtc = new DateTimeOffset(result.Session.ExpiresAtUtc)
                 });
-            return Results.Ok(result.User);
+            return Results.Ok(result.User with { IsSupportAdmin = supportAdmins.IsAdmin(result.User.Id) });
         }).RequireRateLimiting("account-access");
         auth.MapPost("/logout", async (HttpContext context, AccountService accounts,
             IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
@@ -102,11 +102,11 @@ public static class AuthEndpoints
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return Results.NoContent();
         }).RequireAuthorization(CurrentActor.PolicyName);
-        auth.MapGet("/me", async (HttpContext context, AccountService accounts, CancellationToken cancellationToken) =>
+        auth.MapGet("/me", async (HttpContext context, AccountService accounts, ISupportAdminAccess supportAdmins, CancellationToken cancellationToken) =>
         {
             context.Response.Headers.CacheControl = "no-store";
             var user = await accounts.GetUserAsync(CurrentActor.Id(context.User), cancellationToken);
-            return user is null ? Results.Unauthorized() : Results.Ok(user);
+            return user is null ? Results.Unauthorized() : Results.Ok(user with { IsSupportAdmin = supportAdmins.IsAdmin(user.Id) });
         }).RequireAuthorization(CurrentActor.PolicyName);
     }
 

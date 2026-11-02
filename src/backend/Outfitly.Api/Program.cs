@@ -61,6 +61,10 @@ builder.Services.AddRateLimiter(options =>
         {
             PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
         }));
+    foreach (var limit in new[] { (Name: "support-create", Count: 5), (Name: "support-messages", Count: 30) })
+        options.AddPolicy(limit.Name, context => RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions
+            { PermitLimit = limit.Count, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
     options.OnRejected = async (context, _) =>
         await Results.Problem(statusCode: 429, title: "Too many account requests").ExecuteAsync(context.HttpContext);
 });
@@ -90,6 +94,7 @@ app.MapGet("/api/wardrobe/statistics", (HttpContext http, WardrobeStatistics ser
     service.GetAsync(CurrentActor.Id(http.User), token)).RequireAuthorization(CurrentActor.PolicyName);
 app.MapWardrobeEndpoints();
 app.MapCalendarEndpoints();
+app.MapSupportEndpoints();
 app.MapPhotoEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

@@ -12,15 +12,15 @@ public static class AccountSettingsEndpoints
     public static void MapAccountSettingsEndpoints(this RouteGroupBuilder auth)
     {
         auth.MapPatch("/me/profile", async (ProfileRequest request, HttpContext context, AccountService accounts,
-            IUnitOfWork unitOfWork, CancellationToken ct) =>
+            IUnitOfWork unitOfWork, ISupportAdminAccess supportAdmins, CancellationToken ct) =>
         {
             var user = await accounts.ChangeProfileAsync(CurrentActor.Id(context.User), request.DisplayName, request.Username, ct, request.Bio.ValueKind switch { JsonValueKind.String => request.Bio.GetString(), JsonValueKind.Null or JsonValueKind.Undefined => null, _ => throw new ArgumentException("Invalid bio.") }, request.Bio.ValueKind != JsonValueKind.Undefined);
             await unitOfWork.SaveChangesAsync(ct);
-            return Results.Ok(user);
+            return Results.Ok(user with { IsSupportAdmin = supportAdmins.IsAdmin(user.Id) });
         }).RequireAuthorization(CurrentActor.PolicyName);
 
         auth.MapPost("/me/change-password", async (PasswordRequest request, HttpContext context, AccountService accounts,
-            IUnitOfWork unitOfWork, CancellationToken ct) =>
+            IUnitOfWork unitOfWork, ISupportAdminAccess supportAdmins, CancellationToken ct) =>
         {
             await accounts.ChangePasswordAsync(CurrentActor.Id(context.User), request.CurrentPassword, request.NewPassword, ct);
             await unitOfWork.SaveChangesAsync(ct);
@@ -39,7 +39,7 @@ public static class AccountSettingsEndpoints
             return Results.Json(new { pendingEmail = email.Email, confirmationEmailSent = sent }, statusCode: 202);
         }).RequireAuthorization(CurrentActor.PolicyName).RequireRateLimiting("account-access");
 
-        auth.MapDelete("/me/email-change", async (HttpContext context, AccountService accounts, IUnitOfWork unitOfWork, CancellationToken ct) =>
+        auth.MapDelete("/me/email-change", async (HttpContext context, AccountService accounts, IUnitOfWork unitOfWork, ISupportAdminAccess supportAdmins, CancellationToken ct) =>
         {
             await accounts.CancelEmailChangeAsync(CurrentActor.Id(context.User), ct);
             await unitOfWork.SaveChangesAsync(ct);
@@ -47,7 +47,7 @@ public static class AccountSettingsEndpoints
         }).RequireAuthorization(CurrentActor.PolicyName);
 
         auth.MapPost("/confirm-email-change", async (TokenRequest request, HttpContext context, AccountService accounts,
-            IUnitOfWork unitOfWork, CancellationToken ct) =>
+            IUnitOfWork unitOfWork, ISupportAdminAccess supportAdmins, CancellationToken ct) =>
         {
             var userId = await accounts.ConfirmEmailChangeAsync(request.Token, ct);
             await unitOfWork.SaveChangesAsync(ct);
