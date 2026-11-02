@@ -2234,3 +2234,9 @@ dialog::backdrop {
 .calendar-day small { font-size: 10px; }
 .calendar-choice { display: block; margin: 10px 0; width: 100%; overflow-wrap: anywhere; }
 @media(max-width: 600px) { .calendar-grid { gap: 3px; } .calendar-day { padding: 5px; min-height: 65px; } .calendar-navigation h2 { order: -1; width: 100%; } }
+
+.support-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin: 24px 0; }
+.support-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.support-attachments { display: flex; gap: 12px; flex-wrap: wrap; }
+.support-attachments img { max-width: min(260px, 100%); max-height: 220px; object-fit: contain; }
+#support-form, #support-status-form { max-width: 760px; margin: 24px 0; }

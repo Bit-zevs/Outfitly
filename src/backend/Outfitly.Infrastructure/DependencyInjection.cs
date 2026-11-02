@@ -21,6 +21,9 @@ public static class DependencyInjection
         services.AddScoped<WardrobeStatistics>();
         services.AddScoped<IOutfitCalendarStore, EfOutfitCalendarStore>();
         services.AddScoped<OutfitCalendar>();
+        services.AddScoped<ISupportStore, EfSupportStore>();
+        services.AddScoped<ISupportAdminAccess, ConfiguredSupportAdmins>();
+        services.AddScoped<SupportService>();
         services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
         services.AddScoped<PublicProfiles>();
         services.AddScoped<IWorkspaceStore, EfWorkspaceStore>();

@@ -9,11 +9,11 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
     public ProcessedPhoto Process(byte[] content, string contentType)
     {
         contentType = contentType.ToLowerInvariant();
-        if (contentType is not ("image/jpeg" or "image/png")) throw new UnsupportedPhotoException();
+        if (contentType is not ("image/jpeg" or "image/png" or "image/webp")) throw new UnsupportedPhotoException();
         using var data = SKData.CreateCopy(content);
         using var codec = SKCodec.Create(data);
         if (codec is null) throw new ArgumentException("Invalid image content.");
-        var expected = contentType == "image/png" ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
+        var expected = contentType == "image/png" ? SKEncodedImageFormat.Png : contentType == "image/webp" ? SKEncodedImageFormat.Webp : SKEncodedImageFormat.Jpeg;
         if (codec.EncodedFormat != expected) throw new UnsupportedPhotoException();
         if (expected == SKEncodedImageFormat.Png) ValidatePngChunks(content);
         var info = codec.Info;
@@ -43,7 +43,7 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
             canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions());
         }
         using var image = SKImage.FromBitmap(oriented);
-        using var encoded = image.Encode(expected, 90);
+        using var encoded = image.Encode(expected == SKEncodedImageFormat.Webp ? SKEncodedImageFormat.Jpeg : expected, 90);
         return new(encoded.ToArray(), expected == SKEncodedImageFormat.Png ? ".png" : ".jpg");
     }
 

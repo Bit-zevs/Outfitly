@@ -1,3 +1,4 @@
+import { supportPage } from './support.js';
 import { calendarPage } from './calendar.js';
 import { statisticsPage } from './statistics.js';
 import { createDraftSession, favoritesPage, draftsPage } from './workspace.js';
@@ -37,7 +38,7 @@ function navigate(path, replace = false) {
 }
 
 function header(route) {
-  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/statistics', 'Статистика'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/calendar', 'Календарь'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
+  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/statistics', 'Статистика'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/calendar', 'Календарь'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики'], ['/support', 'Поддержка']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
   document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${avatar(auth.user)}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); document.querySelector('#primary-nav').classList.toggle('open', open); };
@@ -60,6 +61,8 @@ async function resolve(ctx) {
   if (path === '/discover') return discover(ctx);
   if (path === '/favorites') return favoritesPage(ctx);
   if (path === '/drafts') return draftsPage(ctx);
+  if (parts[0] === 'support' && parts.length <= 2) return supportPage(ctx, false, parts[1]);
+  if (parts[0] === 'admin' && parts[1] === 'support' && parts.length <= 3) return supportPage(ctx, true, parts[2]);
   if (path === '/account') return account(ctx);
   if (parts[0]?.startsWith('@')) {
     const username = decodeURIComponent(parts[0].slice(1));
