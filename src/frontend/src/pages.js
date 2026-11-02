@@ -1,3 +1,4 @@
+import { wardrobeQuery, wardrobeFilters, bindWardrobeFilters } from './wardrobe-filters.js';
 import { bindWorkspaceActions } from './workspace.js';
 import { avatar } from './components.js';
 import { bindEngagement } from './engagement.js';
@@ -82,8 +83,8 @@ export function bindFilters(ctx) {
 }
 
 export async function wardrobe(ctx) {
-  const page = await ctx.get(`/items?${catalogQuery(ctx.route.query)}`);
-  return { title: 'Мой гардероб', html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${filters(ctx.route, page)}${page.items.length ? `<div class="cards">${page.items.map(i => itemCard(i)).join('')}</div>` : empty('Здесь пока нет вещей', 'Добавьте первую вещь или измените условия поиска.', link('/items/new', 'Добавить вещь', 'btn'))}${pagination(ctx.route, page)}`, bind: () => bindFilters(ctx) };
+  const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(ctx.route.query)}`), ctx.get('/items/filter-options')]);
+  return { title: 'Мой гардероб', html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${wardrobeFilters(ctx.route, options, page.total)}${page.items.length ? `<div class="cards">${page.items.map(i => itemCard(i)).join('')}</div>` : empty('Ничего не найдено', 'Добавьте вещь или сбросьте условия поиска.', link('/wardrobe', 'Сбросить фильтры', 'btn outline'))}${pagination(ctx.route, page)}`, bind: () => bindWardrobeFilters(ctx) };
 }
 
 export async function outfitsPage(ctx) {

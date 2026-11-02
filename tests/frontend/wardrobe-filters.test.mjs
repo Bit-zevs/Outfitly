@@ -1,0 +1,41 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+import { wardrobeFilters, bindWardrobeFilters, wardrobeQuery } from '../../src/frontend/src/wardrobe-filters.js';
+import { wardrobe } from '../../src/frontend/src/pages.js';
+import { parseRoute } from '../../src/frontend/src/router.js';
+import { pagination } from '../../src/frontend/src/components.js';
+const { JSDOM } = createRequire(new URL('../../src/frontend/package.json', import.meta.url))('jsdom');
+test('form applies all fields together, resets page and restores URL selections', t => {
+  const route = parseRoute('#/wardrobe?search=linen&color=removed&brandMissing=true&page=4&sort=nameDesc');
+  const dom = new JSDOM(wardrobeFilters(route, { colors: ['<white>', null], brands: [null], sizes: ['m'] }, 2));
+  const previous = globalThis.document; globalThis.document = dom.window.document;
+  t.after(() => { globalThis.document = previous; dom.window.close(); });
+  let target; bindWardrobeFilters({ route, navigate: value => { target = value; } });
+  const form = document.querySelector('form');
+  assert.equal(form.elements.color.value, 'value:removed');
+  assert.equal(form.elements.brand.value, 'missing');
+  form.elements.search.value = ' cotton ';
+  form.elements.category.value = 'Top'; form.elements.size.value = 'value:m'; form.elements.publication.value = 'private';
+  form.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  form.elements.sort.dispatchEvent(new dom.window.Event('change'));
+  assert.equal(target, undefined);
+  form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  const next = parseRoute(`#${target}`);
+  assert.equal(next.query.get('search'), 'cotton'); assert.equal(next.query.get('brandMissing'), 'true');
+  assert.equal(next.query.get('color'), 'removed'); assert.equal(next.query.get('size'), 'm');
+  assert.equal(next.query.get('publication'), 'private'); assert.equal(next.query.get('category'), 'Top');
+  assert.equal(next.query.has('page'), false);
+  assert.equal(document.querySelector('a').getAttribute('href'), '#/wardrobe');
+  assert.match(dom.serialize(), /&lt;white&gt;/);
+  assert.equal(wardrobeQuery(next.query).get('brandMissing'), 'true');
+  assert.match(pagination(next, { page: 1, pageSize: 20, total: 30 }), /brandMissing=true/);
+});
+test('wardrobe loads options and filtered page and offers reset on zero matches', async () => {
+  const calls = [];
+  const page = await wardrobe({ route: parseRoute('#/wardrobe?size=m&publication=private'), get: async path => {
+    calls.push(path); return path === '/items/filter-options' ? { colors: [], brands: [], sizes: [] } : { items: [], total: 0, page: 1, pageSize: 20 };
+  } });
+  assert.equal(calls.length, 2); assert.match(calls[0], /size=m/); assert.match(page.html, /Ничего не найдено/); assert.match(page.html, /Сбросить фильтры/);
+  await assert.rejects(wardrobe({ route: parseRoute('#/wardrobe'), get: async () => { throw new Error('offline'); } }), /offline/);
+});

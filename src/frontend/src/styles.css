@@ -2220,3 +2220,8 @@ dialog::backdrop {
 .statistics-distribution li { margin-bottom: 16px; overflow-wrap: anywhere; }
 .statistics-distribution li div { display: flex; justify-content: space-between; gap: 12px; }
 .statistics-distribution meter { display: block; width: 100%; height: 14px; }
+
+.wardrobe-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; margin-bottom: 28px; align-items: end; }
+.wardrobe-filters label { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.wardrobe-filters input, .wardrobe-filters select { width: 100%; min-width: 0; }
+.wardrobe-filters .actions { flex-wrap: wrap; }

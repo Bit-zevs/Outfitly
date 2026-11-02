@@ -21,7 +21,9 @@ public static class WardrobeEndpoints
 
         var items = app.MapGroup("/api/items").RequireAuthorization(CurrentActor.PolicyName);
         items.MapGet("/", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
-            await catalog.GetMyItemsAsync(CurrentActor.Id(context.User), CatalogRequest.Parse(context.Request.Query), context.RequestAborted), true));
+            await catalog.GetMyItemsAsync(CurrentActor.Id(context.User), CatalogRequest.Parse(context.Request.Query, personal: true), context.RequestAborted), true));
+        items.MapGet("/filter-options", (HttpContext context, ItemCatalog catalog) =>
+            catalog.GetFilterOptionsAsync(CurrentActor.Id(context.User), context.RequestAborted));
         items.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             WardrobeResponses.Item(service.GetItem(CurrentActor.Id(user), id), $"/api/items/{id}/photo"));
         items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
