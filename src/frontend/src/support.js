@@ -1,5 +1,5 @@
 import { title, escape, link, empty, pagination } from './components.js';
-import { showError } from './ui.js';
+import { busy, showError } from './ui.js';
 export const supportCategories = { feedback: 'Отзыв', suggestion: 'Предложение', bug: 'Баг', problem: 'Проблема' };
 export const supportStatuses = { new: 'Новое', inProgress: 'В работе', closed: 'Закрыто' };
 const stamp = value => new Date(value.endsWith('Z') ? value : `${value}Z`).toLocaleString('ru-RU');
@@ -28,15 +28,22 @@ export async function supportPage(ctx, admin = false, id = null) {
       ticket = await ctx.get(`${api}/${id}`); if (!current(ctx)) return;
       document.querySelector('#support-messages').innerHTML = renderMessages();
       document.querySelector('#support-status').textContent = `${supportCategories[ticket.category]} · ${supportStatuses[ticket.status]}`;
-      if (ticket.status === 'closed') { document.querySelector('#support-form button')?.setAttribute('disabled', ''); }
+      let form = document.querySelector('#support-form');
+      if (!form && ticket.status !== 'closed') {
+        document.querySelector('#support-reply').innerHTML = messageForm();
+        bindMessage(ctx, `${api}/${id}/messages`, () => ticket.revision, () => ticket.status === 'closed', reloadConflict);
+        form = document.querySelector('#support-form');
+      }
+      if (form) form.querySelector('button').disabled = ticket.status === 'closed';
+      if (statusForm) statusForm.elements.status.value = ticket.status;
     };
-    if (ticket.status !== 'closed') bindMessage(ctx, `${api}/${id}/messages`, () => ticket.revision, ticket.status === 'closed', reloadConflict);
+    if (ticket.status !== 'closed') bindMessage(ctx, `${api}/${id}/messages`, () => ticket.revision, () => ticket.status === 'closed', reloadConflict);
     const statusForm = document.querySelector('#support-status-form'); let savingStatus = false;
     if (statusForm) statusForm.onsubmit = async event => {
-      event.preventDefault(); if (savingStatus) return; savingStatus = true; ctx.setSaving?.(true); statusForm.querySelector('button').disabled = true;
-      try { await ctx.api.request(`${api}/${id}/status`, { method: 'PATCH', body: { revision: ticket.revision, status: statusForm.elements.status.value }, signal: ctx.signal }); if (current(ctx)) ctx.refresh(); }
+      event.preventDefault(); if (savingStatus || document.querySelector('#support-form')?.getAttribute('aria-busy') === 'true') return; savingStatus = true; ctx.setSaving?.(true); busy(statusForm, true);
+      try { await ctx.api.request(`${api}/${id}/status`, { method: 'PATCH', body: { revision: ticket.revision, status: statusForm.elements.status.value }, signal: ctx.signal }); if (current(ctx)) await reloadConflict(); }
       catch (error) { if (current(ctx)) { if (error.status === 409) { try { await reloadConflict(); } catch { /* Retry preserves the current page. */ } } if (current(ctx)) showError(document.querySelector('#support-error'), error); } }
-      finally { savingStatus = false; if (current(ctx)) { ctx.setSaving?.(false); statusForm.querySelector('button').disabled = false; } }
+      finally { savingStatus = false; if (current(ctx)) { ctx.setSaving?.(false); busy(statusForm, false); } }
     };
   } };
 }
@@ -44,7 +51,7 @@ function bindMessage(ctx, path, revision, closed, conflict) {
   const form = document.querySelector('#support-form'); let saving = false;
   form.oninput = () => ctx.setDirty?.(true);
   form.onsubmit = async event => {
-    event.preventDefault(); if (saving || closed) return;
+    event.preventDefault(); if (saving || (typeof closed === 'function' ? closed() : closed) || document.querySelector('#support-status-form')?.getAttribute('aria-busy') === 'true') return;
     const errorElement = document.querySelector('#support-form-error'); errorElement.hidden = true;
     const files = [...form.elements.images.files];
     if (files.length > 3 || files.some(f => f.size > 5 * 1024 * 1024)) { showError(errorElement, new Error('attachments')); errorElement.textContent = 'Выберите до трёх изображений, каждое не больше 5 МиБ.'; return; }
@@ -52,7 +59,7 @@ function bindMessage(ctx, path, revision, closed, conflict) {
     const body = new FormData();
     for (const key of ['category', 'subject', 'text']) if (form.elements[key]) body.append(key, form.elements[key].value);
     files.forEach(file => body.append('images', file)); if (revision) body.append('revision', revision());
-    saving = true; ctx.setSaving?.(true); form.querySelector('button').disabled = true;
+    saving = true; ctx.setSaving?.(true); busy(form, true);
     try {
       const result = await ctx.api.request(path, { method: 'POST', body, signal: ctx.signal });
       if (!current(ctx)) return; ctx.setDirty?.(false);
@@ -61,6 +68,6 @@ function bindMessage(ctx, path, revision, closed, conflict) {
       if (!current(ctx)) return;
       if (error.status === 409 && conflict) { try { await conflict(); } catch { /* Preserve text even when refresh fails. */ } }
       if (current(ctx)) showError(errorElement, error);
-    } finally { saving = false; if (current(ctx)) { ctx.setSaving?.(false); form.querySelector('button').disabled = document.querySelector('#support-status')?.textContent.includes('Закрыто') ?? false; } }
+    } finally { saving = false; if (current(ctx)) { ctx.setSaving?.(false); busy(form, false); form.querySelector('button').disabled = typeof closed === 'function' ? closed() : closed; } }
   };
 }

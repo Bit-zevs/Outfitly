@@ -43,3 +43,54 @@ test('admin list shows filters and pagination and personal admin sees admin link
   assert.match((await supportPage(ctx)).html, /Обращения пользователей/);
   assert.match((await supportPage(ctx, true)).html, /support-filters/);
 });
+
+test('admin status changes retain draft text and file input through close and reopen', async t => {
+  let state = { ...ticket }; let dirty = false;
+  const ctx = { auth: { user: { isSupportAdmin: true } }, isCurrent: () => true,
+    get: async () => state, refresh: () => { assert.fail('must preserve draft DOM'); }, setDirty: value => { dirty = value; },
+    api: { request: async (path, options) => { state = { ...state, status: options.body.status, revision: 'next' }; } } };
+  mount(t, await supportPage(ctx, true, 'ticket'));
+  const form = document.querySelector('#support-form'); const files = form.elements.images;
+  form.elements.text.value = 'Unsent admin reply'; form.oninput();
+  const status = document.querySelector('#support-status-form'); status.elements.status.value = 'closed';
+  await status.onsubmit({ preventDefault() {} });
+  assert.equal(form.elements.text.value, 'Unsent admin reply'); assert.equal(form.elements.images, files); assert.equal(dirty, true);
+  assert.equal(form.querySelector('button').disabled, true);
+  status.elements.status.value = 'inProgress'; await status.onsubmit({ preventDefault() {} });
+  assert.equal(form.elements.text.value, 'Unsent admin reply'); assert.equal(form.querySelector('button').disabled, false);
+});
+
+test('creation locks all inputs during slow submit and unlocks them after failure', async t => {
+  let finish;
+  const ctx = { auth: { user: {} }, isCurrent: () => true,
+    api: { request: async () => { await new Promise(resolve => { finish = resolve; }); throw new Error('offline'); } } };
+  mount(t, await supportPage(ctx, false, 'new'));
+  const form = document.querySelector('#support-form'); form.elements.subject.value = 'Subject'; form.elements.text.value = 'Draft';
+  const pending = form.onsubmit({ preventDefault() {} });
+  for (const element of form.elements) assert.equal(element.disabled, true);
+  assert.equal(form.getAttribute('aria-busy'), 'true');
+  finish(); await pending;
+  for (const element of form.elements) assert.equal(element.disabled, false);
+  assert.equal(form.elements.text.value, 'Draft');
+});
+
+test('reply locks text and screenshots until successful request completes', async t => {
+  let finish; let refreshed = false;
+  const ctx = { auth: { user: {} }, isCurrent: () => true, get: async () => ticket,
+    refresh: () => { refreshed = true; }, api: { request: async (path, options) => {
+      assert.equal(options.body.get('text'), 'Submitted'); await new Promise(resolve => { finish = resolve; });
+    } } };
+  mount(t, await supportPage(ctx, false, 'ticket')); const form = document.querySelector('#support-form'); form.elements.text.value = 'Submitted';
+  const pending = form.onsubmit({ preventDefault() {} });
+  assert.equal(form.elements.text.disabled, true); assert.equal(form.elements.images.disabled, true); assert.equal(refreshed, false);
+  finish(); await pending; assert.equal(refreshed, true);
+});
+
+test('reopening initially closed ticket creates a working reply form', async t => {
+  let state = { ...ticket, status: 'closed' }; let replies = 0;
+  const ctx = { auth: { user: { isSupportAdmin: true } }, isCurrent: () => true, get: async () => state, refresh: () => {},
+    api: { request: async (path, options) => { if (options.method === 'PATCH') state = { ...state, status: 'inProgress', revision: 'open' }; else { replies++; assert.equal(options.body.get('revision'), 'open'); } } } };
+  mount(t, await supportPage(ctx, true, 'ticket'));
+  const status = document.querySelector('#support-status-form'); status.elements.status.value = 'inProgress'; await status.onsubmit({ preventDefault() {} });
+  const form = document.querySelector('#support-form'); form.elements.text.value = 'Reopened'; await form.onsubmit({ preventDefault() {} }); assert.equal(replies, 1);
+});
