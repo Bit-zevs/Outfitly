@@ -1,3 +1,4 @@
+import { calendarPage } from './calendar.js';
 import { statisticsPage } from './statistics.js';
 import { createDraftSession, favoritesPage, draftsPage } from './workspace.js';
 import { confirmEmailChangePage } from './account-settings.js';
@@ -36,7 +37,7 @@ function navigate(path, replace = false) {
 }
 
 function header(route) {
-  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/statistics', 'Статистика'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
+  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/statistics', 'Статистика'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/calendar', 'Календарь'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
   document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${avatar(auth.user)}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); document.querySelector('#primary-nav').classList.toggle('open', open); };
@@ -54,6 +55,7 @@ async function resolve(ctx) {
   if (path === '/statistics') return statisticsPage(ctx);
   if (path === '/dashboard') return dashboard(ctx);
   if (path === '/wardrobe') return wardrobe(ctx);
+  if (path === '/calendar') return calendarPage(ctx);
   if (path === '/outfits') return outfitsPage(ctx);
   if (path === '/discover') return discover(ctx);
   if (path === '/favorites') return favoritesPage(ctx);

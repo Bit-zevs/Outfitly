@@ -227,6 +227,7 @@ public sealed class AuthenticationApiTests
         using var replay = ReplayClient(factory, cookie);
         Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/wardrobe/statistics")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/items/filter-options")).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await replay.GetAsync("/api/calendar?month=2028-02")).StatusCode);
         var rejected = await replay.GetAsync("/api/items");
         Assert.Equal(HttpStatusCode.Unauthorized, rejected.StatusCode);
         Assert.Null(rejected.Headers.Location);
