@@ -18,7 +18,7 @@ export function changedFilter(route, key, value) {
   return `${route.path}?${query}`;
 }
 export function privateRoute(path) {
-  return /^\/(dashboard|statistics|calendar|wardrobe|items|outfits|account|favorites|drafts)(\/|$)/.test(path);
+  return /^\/(dashboard|statistics|support|admin|calendar|wardrobe|items|outfits|account|favorites|drafts)(\/|$)/.test(path);
 }
 export function safeReturn(value) {
   return value && privateRoute(value.split('?')[0]) ? value : '/dashboard';
