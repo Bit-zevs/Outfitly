@@ -21,9 +21,19 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "OutfitAssignments" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
+        catch (DbUpdateException exception) when (exception.Entries.Any(e => e.State == EntityState.Added && e.Entity is OutfitAssignment))
+        {
+            using var clean = new OutfitlyDbContext(options);
+            foreach (var assignment in exception.Entries.Select(e => e.Entity).OfType<OutfitAssignment>())
+                if (!clean.Outfits.Any(x => x.Id == assignment.OutfitId && x.OwnerId == assignment.OwnerId) ||
+                    clean.Set<OutfitAssignment>().Any(x => x.OwnerId == assignment.OwnerId && x.Date == assignment.Date && x.OutfitId == assignment.OutfitId))
+                    throw new WardrobeConcurrencyException(exception);
+            throw;
+        }
         catch (DbUpdateException exception) when (HasWorkspaceAddition(exception))
         {
             if (WorkspaceCollision(exception)) throw new WardrobeConcurrencyException(exception);
@@ -47,9 +57,19 @@ public sealed class OutfitlyDbContext(DbContextOptions<OutfitlyDbContext> option
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "PostInteractions" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "UserFollows" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, TableName: "Favorites" or "EditorDrafts" or "CopyReceipts" }) { throw new WardrobeConcurrencyException(exception); }
+        catch (DbUpdateException exception) when (exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation or PostgresErrorCodes.ForeignKeyViolation, TableName: "OutfitAssignments" }) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateConcurrencyException exception) { throw new WardrobeConcurrencyException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateEmail(exception)) { throw new AccountConflictException(exception); }
         catch (DbUpdateException exception) when (IsDuplicateUsername(exception)) { throw new UsernameConflictException(exception); }
+        catch (DbUpdateException exception) when (exception.Entries.Any(e => e.State == EntityState.Added && e.Entity is OutfitAssignment))
+        {
+            using var clean = new OutfitlyDbContext(options);
+            foreach (var assignment in exception.Entries.Select(e => e.Entity).OfType<OutfitAssignment>())
+                if (!clean.Outfits.Any(x => x.Id == assignment.OutfitId && x.OwnerId == assignment.OwnerId) ||
+                    clean.Set<OutfitAssignment>().Any(x => x.OwnerId == assignment.OwnerId && x.Date == assignment.Date && x.OutfitId == assignment.OutfitId))
+                    throw new WardrobeConcurrencyException(exception);
+            throw;
+        }
         catch (DbUpdateException exception) when (HasWorkspaceAddition(exception))
         {
             if (WorkspaceCollision(exception)) throw new WardrobeConcurrencyException(exception);
