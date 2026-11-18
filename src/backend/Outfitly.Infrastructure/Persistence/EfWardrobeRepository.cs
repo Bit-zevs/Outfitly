@@ -13,6 +13,19 @@ public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeR
     public IReadOnlyCollection<Outfit> GetOutfits() => Read(context.Outfits);
     public IReadOnlyCollection<ShareLink> GetLinks() => Read(context.ShareLinks);
 
+    public ShareLink? FindActiveLink(string token, ShareTargetType targetType) =>
+        context.ShareLinks.AsNoTracking().SingleOrDefault(link =>
+            link.Token == token && link.TargetType == targetType && link.IsActive);
+
+    public WardrobeItem? ReadItem(Guid id) =>
+        context.WardrobeItems.AsNoTracking().SingleOrDefault(item => item.Id == id);
+
+    public Outfit? ReadOutfit(Guid id) =>
+        context.Outfits.AsNoTracking().SingleOrDefault(outfit => outfit.Id == id);
+
+    public IReadOnlyCollection<WardrobeItem> ReadItems(IReadOnlyCollection<Guid> ids) =>
+        context.WardrobeItems.AsNoTracking().Where(item => ids.Contains(item.Id)).ToArray();
+
     public void MarkOutfitChanged(Outfit outfit)
     {
         // Preserve OriginalValue from the first tracked read. Even link-only and
