@@ -163,20 +163,20 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     public ItemView? GetSharedItem(string token)
     {
         var link = ActiveLink(token, ShareTargetType.WardrobeItem);
-        var item = link is null ? null : repository.GetAll().SingleOrDefault(item => item.Id == link.TargetId);
+        var item = link is null ? null : repository.ReadItem(link.TargetId);
         return item is null ? null : View(item);
     }
 
     public OutfitView? GetSharedOutfit(string token)
     {
         var link = ActiveLink(token, ShareTargetType.Outfit);
-        var outfit = link is null ? null : repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == link.TargetId);
-        return outfit is null || outfit.ItemIds.Count == 0 ? null : View(outfit);
+        var outfit = link is null ? null : repository.ReadOutfit(link.TargetId);
+        return outfit is null || outfit.ItemIds.Count == 0 ? null :
+            View(outfit, repository.ReadItems(outfit.ItemIds).ToDictionary(item => item.Id));
     }
 
     private ShareLink? ActiveLink(string token, ShareTargetType targetType) =>
-        repository.GetLinks().SingleOrDefault(link =>
-            link.IsActive && link.TargetType == targetType && link.Token == token);
+        repository.FindActiveLink(token, targetType);
 
     private WardrobeItem Item(Guid id) =>
         repository.GetAll().SingleOrDefault(item => item.Id == id)
@@ -249,11 +249,11 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
         if (itemId is null)
         {
             var link = ActiveLink(token, ShareTargetType.WardrobeItem);
-            return link is null ? null : repository.GetAll().SingleOrDefault(item => item.Id == link.TargetId)?.PhotoStorageKey;
+            return link is null ? null : repository.ReadItem(link.TargetId)?.PhotoStorageKey;
         }
         var outfitLink = ActiveLink(token, ShareTargetType.Outfit);
-        var outfit = outfitLink is null ? null : repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == outfitLink.TargetId);
-        return outfit?.ItemIds.Contains(itemId.Value) == true ? Item(itemId.Value).PhotoStorageKey : null;
+        var outfit = outfitLink is null ? null : repository.ReadOutfit(outfitLink.TargetId);
+        return outfit?.ItemIds.Contains(itemId.Value) == true ? repository.ReadItem(itemId.Value)?.PhotoStorageKey : null;
     }
 
     private OutfitView View(Outfit outfit) => Views([outfit]).Single();

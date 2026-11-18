@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Npgsql;
 using Outfitly.Application;
 using Outfitly.Domain;
@@ -29,6 +30,9 @@ internal sealed class TestDatabase : IAsyncDisposable
     }
 
     internal OutfitlyDbContext Open() => new(options);
+
+    internal OutfitlyDbContext Open(params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<OutfitlyDbContext>(options).AddInterceptors(interceptors).Options);
     public ValueTask DisposeAsync() => connection.DisposeAsync();
 }
 
@@ -92,6 +96,9 @@ internal sealed class PostgreSqlDatabase : IAsyncDisposable
     }
 
     internal OutfitlyDbContext Open() => new(options);
+
+    internal OutfitlyDbContext Open(params IInterceptor[] interceptors) =>
+        new(new DbContextOptionsBuilder<OutfitlyDbContext>(options).AddInterceptors(interceptors).Options);
 
     public async ValueTask DisposeAsync() => await ExecuteAdminAsync($"DROP SCHEMA \"{schema}\" CASCADE");
 

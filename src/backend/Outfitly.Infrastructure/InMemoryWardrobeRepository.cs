@@ -13,6 +13,13 @@ public sealed class InMemoryWardrobeRepository : IWardrobeRepository
     public IReadOnlyCollection<Outfit> GetOutfits() => _outfits.ToArray();
     public IReadOnlyCollection<ShareLink> GetLinks() => _links.ToArray();
 
+    public ShareLink? FindActiveLink(string token, ShareTargetType targetType) =>
+        _links.SingleOrDefault(link => link.Token == token && link.TargetType == targetType && link.IsActive);
+    public WardrobeItem? ReadItem(Guid id) => _items.SingleOrDefault(item => item.Id == id);
+    public Outfit? ReadOutfit(Guid id) => _outfits.SingleOrDefault(outfit => outfit.Id == id);
+    public IReadOnlyCollection<WardrobeItem> ReadItems(IReadOnlyCollection<Guid> ids) =>
+        _items.Where(item => ids.Contains(item.Id)).ToArray();
+
     // This single-process test adapter has no independent persistence snapshots.
     public void MarkOutfitChanged(Outfit outfit) => ArgumentNullException.ThrowIfNull(outfit);
 
