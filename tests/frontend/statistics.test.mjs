@@ -1,3 +1,4 @@
+import { createApi } from '../../src/frontend/src/api.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { statisticsPage } from '../../src/frontend/src/statistics.js';
@@ -5,7 +6,7 @@ import { privateRoute } from '../../src/frontend/src/router.js';
 const data = { items: 0, outfits: 0, publicItems: 0, publicOutfits: 0, itemsWithoutOutfits: 0, categories: [{ category: 'Top', count: 0 }], colors: [], brands: [], itemReactions: { views: 0, likes: 0 }, outfitReactions: { views: 0, likes: 0 } };
 test('statistics is private and displays empty totals and zero categories', async () => {
   assert.equal(privateRoute('/statistics'), true);
-  const page = await statisticsPage({ get: async path => { assert.equal(path, '/api/wardrobe/statistics'); return data; } });
+  const page = await statisticsPage({ get: async path => { assert.equal(path, '/wardrobe/statistics'); return data; } });
   assert.match(page.html, /Гардероб пока пуст/);
   assert.match(page.html, /Верх/);
   assert.match(page.html, /value="0"/);
@@ -18,4 +19,11 @@ test('statistics escapes labels and keeps every group', async () => {
 });
 test('statistics propagates errors to the shared page retry handler', async () => {
   await assert.rejects(statisticsPage({ get: async () => { throw new Error('offline'); } }), /offline/);
+});
+
+test('statistics uses exactly one API prefix through the shared client', async () => {
+ const calls=[];
+ const api=createApi(async url => { calls.push(url); return new Response(JSON.stringify(data), { headers: { 'Content-Type':'application/json' } }); });
+ await statisticsPage({get:path=>api.request(path)});
+ assert.deepEqual(calls,['/api/wardrobe/statistics']);
 });

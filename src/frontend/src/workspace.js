@@ -1,6 +1,6 @@
 import { escape, empty, link, pagination, photo, title } from './components.js';
 import { errorMessage } from './api.js';
-import { busy } from './ui.js';
+import { busy, confirmAction } from './ui.js';
 
 export function bindWorkspaceActions(ctx, kind, resource, token) {
   const root = document.querySelector('#workspace-actions'); if (!root) return;
@@ -41,21 +41,21 @@ export async function favoritesPage(ctx) {
 export async function draftsPage(ctx) {
   const page = await ctx.get(`/drafts?page=${Number(ctx.route.query.get('page')) || 1}`);
   return { title: 'Черновики', html: `${title('Незавершённое редактирование', 'Черновики', 'Здесь хранятся автоматически сохранённые изменения. Публикации изменяются только после явного сохранения.')} ${page.items.length ? page.items.map(d => `<article class="linebox"><h2>${escape(d.content.name || (d.kind === 'items' ? 'Новая вещь' : 'Новый образ'))}</h2><p>${escape(new Date(d.updatedAtUtc + (d.updatedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString('ru-RU'))}</p><details><summary>Посмотреть черновик</summary><p class="profile-bio">${escape(d.content.description || '')}</p>${d.photoUrl ? photo({ name: d.content.name, photoUrl: d.photoUrl }) : ''}<p>${d.kind === 'outfits' ? `Выбрано вещей: ${(d.content.itemIds || []).length}` : escape([d.content.category, d.content.color, d.content.size, d.content.brand].filter(Boolean).join(' · '))}</p></details><div class="actions">${link(d.targetId ? `/${d.kind}/${d.targetId}/edit` : `/${d.kind}/new`, 'Продолжить', 'btn outline')}<button class="btn outline danger" data-delete-draft="${escape(d.id)}" data-version="${escape(d.version)}">Удалить черновик</button></div></article>`).join('') : empty('Черновиков пока нет', 'Изменения в редакторах сохраняются автоматически.')} ${pagination(ctx.route, page)}<p class="error" id="drafts-error" role="alert" hidden></p>`, bind() {
-    document.querySelectorAll('[data-delete-draft]').forEach(button => { button.onclick = async () => {
-      if (button.disabled) return; button.disabled = true;
-      try { await ctx.api.request(`/drafts/${button.dataset.deleteDraft}?version=${button.dataset.version}`, { method: 'DELETE' }); if (ctx.isCurrent()) ctx.refresh(); }
-      catch (e) { if (ctx.isCurrent()) { const error = document.querySelector('#drafts-error'); error.hidden = false; error.textContent = errorMessage(e); } }
-      finally { button.disabled = false; }
+    document.querySelectorAll('[data-delete-draft]').forEach(button => { button.onclick = () => {
+      confirmAction('Удалить черновик?', 'Изменения из черновика будут потеряны.', async () => {
+        await ctx.api.request(`/drafts/${button.dataset.deleteDraft}?version=${button.dataset.version}`, { method: 'DELETE' });
+        if (ctx.isCurrent()) ctx.refresh();
+      });
     }; });
   } };
 }
 
 export function createDraftSession({ ctx, kind, id, form, draft, baseline, refresh }) {
-  const panel = document.createElement('section'); panel.className = 'linebox server-draft'; form.prepend(panel);
+  const panel = document.createElement('section'); panel.className = 'linebox server-draft'; panel.setAttribute('aria-live', 'polite'); (form.querySelector('.footer-actions') || form).append(panel);
   let stored = null, draftId = crypto.randomUUID(), baseVersion = baseline?.editVersion || null;
   let timer, running, generation = 0, savedGeneration = 0, uploadedFile = null, disposed = false, blocked = true, completed = false, finalizing = false;
   const active = () => !disposed && ctx.isCurrent() && form.isConnected;
-  const status = text => { if (active()) panel.textContent = text; };
+  const status = text => { if (active()) { panel.classList.remove('needs-attention'); panel.textContent = text; } };
   const request = (path, options) => ctx.api.request(path, options);
   function snapshot() {
     const value = name => form.elements[name]?.value || null;
@@ -64,7 +64,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
   }
   async function apply(remote) {
     const content = remote.content;
-    for (const name of ['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl']) if (form.elements[name]) form.elements[name].value = content[name] || '';
+    for (const name of ['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl']) if (form.elements[name]) { const control = form.elements[name], value = content[name] || ''; if (control.tagName === 'SELECT' && value && ![...control.options].some(option => option.value === value)) { const option = document.createElement('option'); option.value = value; option.textContent = value; control.append(option); } control.value = value; control.dispatchEvent(new control.ownerDocument.defaultView.Event('change')); }
     if (kind === 'items') {
       form.elements.photoMode.value = content.photoMode; draft.photoMode = content.photoMode; draft.file = null; uploadedFile = null;
       draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl;
@@ -83,16 +83,16 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (id) current = await ctx.get(`/${kind}/${id}`);
     if (!active()) return;
     const changed = id && remote.baseVersion !== current.editVersion;
-    panel.innerHTML = `<p>Найден черновик от ${escape(new Date(remote.updatedAtUtc + (remote.updatedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString('ru-RU'))}.</p><p>В черновике: ${escape(remote.content.name || 'Без названия')} — ${escape(remote.content.description || '')}</p>${changed ? `<p>Оригинал изменился. Сейчас на сервере: ${escape(current.name)} — ${escape(current.description || '')}.</p><p>Состав: ${escape((current.items || []).map(x => x.name).join(', '))}</p>` : ''}<button type="button" class="btn outline" data-restore>${changed ? 'Я сверил данные — восстановить' : 'Восстановить'}</button><button type="button" class="btn outline danger" data-discard>Удалить черновик</button>${conflict ? '<button type="button" class="btn outline" data-keep>Я сверил данные — сохранить мой вариант</button>' : ''}`;
+    panel.classList.add('needs-attention'); panel.innerHTML = `<p>Найден черновик от ${escape(new Date(remote.updatedAtUtc + (remote.updatedAtUtc.endsWith('Z') ? '' : 'Z')).toLocaleString('ru-RU'))}.</p><p>В черновике: ${escape(remote.content.name || 'Без названия')} — ${escape(remote.content.description || '')}</p>${changed ? `<p>Оригинал изменился. Сейчас на сервере: ${escape(current.name)} — ${escape(current.description || '')}.</p><p>Состав: ${escape((current.items || []).map(x => x.name).join(', '))}</p>` : ''}<button type="button" class="btn outline" data-restore>${changed ? 'Я сверил данные — восстановить' : 'Восстановить'}</button><button type="button" class="btn outline danger" data-discard>Удалить черновик</button>${conflict ? '<button type="button" class="btn outline" data-keep>Я сверил данные — сохранить мой вариант</button>' : ''}`;
     // The restore decision remains operable while the resource fields are locked.
     panel.querySelector('[data-restore]').onclick = async () => {
       try { await apply(remote); if (active()) { baseVersion = current?.editVersion || remote.baseVersion; if (changed) changedLocally(); } } catch (e) { showFailure(e); }
     };
-    panel.querySelector('[data-discard]').onclick = async () => {
+    panel.querySelector('[data-discard]').onclick = () => confirmAction('Удалить черновик?', 'Изменения из черновика будут потеряны.', async () => {
       const buttons = panel.querySelectorAll('button'); buttons.forEach(x => { x.disabled = true; });
       try { await request(`/drafts/${remote.id}?version=${remote.version}`, { method: 'DELETE' }); if (!active()) return; stored = null; draftId = crypto.randomUUID(); blocked = false; baseVersion = current?.editVersion || null; busy(form, false); refresh(); status('Черновик удалён.'); }
-      catch (e) { showFailure(e); buttons.forEach(x => { x.disabled = false; }); }
-    };
+      catch (e) { buttons.forEach(x => { x.disabled = false; }); throw e; }
+    });
     const keep = panel.querySelector('[data-keep]');
     if (keep) keep.onclick = () => { stored = remote; draftId = remote.id; uploadedFile = null; baseVersion = current?.editVersion || remote.baseVersion; blocked = false; busy(form, false); refresh(); changedLocally(); };
   }
@@ -126,7 +126,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (running) { await running; if (active() && savedGeneration !== generation) return flush(); return; }
     if (stored && savedGeneration === generation) return;
     const mine = generation, content = snapshot(), file = draft.file;
-    status('Сохраняется…');
+    status('Сохраняем черновик…');
     running = (async () => {
       stored = await request(`/drafts/${draftId}`, { method: 'PUT', body: { kind, targetId: id || null, version: stored?.version || null, baseVersion, content } });
       if (kind === 'items' && content.photoMode === 'file' && file && (file !== uploadedFile || !stored.photoUrl)) {
@@ -137,7 +137,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
       }
       savedGeneration = mine;
       if (!active()) return;
-      if (mine === generation) { ctx.setDirty(false); status('Черновик сохранён на сервере.'); }
+      if (mine === generation) { ctx.setDirty(false); status('Черновик сохранён'); }
     })();
     try { await running; } finally { running = null; }
     if (active() && savedGeneration !== generation) return flush();
@@ -147,7 +147,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
   const ready = request(`/drafts/active?kind=${kind}${id ? `&targetId=${id}` : ''}`).then(async result => {
     if (!active()) return;
     if (result.draft) await offer(result.draft);
-    else { blocked = false; busy(form, false); refresh(); status('Изменения автоматически сохраняются в черновик.'); }
+    else { blocked = false; busy(form, false); refresh(); status('Автосохранение включено'); }
   }).catch(showFailure);
   form.addEventListener('input', changedLocally);
   form.addEventListener('change', changedLocally);

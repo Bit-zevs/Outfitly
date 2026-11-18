@@ -26,8 +26,8 @@ test('profile save updates identity without losing edits in the independent emai
   password.elements.newPassword.value = 'unsaved password'; password.oninput();
   profile.elements.displayName.value = ' Мария '; profile.elements.username.value = 'maria'; profile.oninput();
   await profile.onsubmit({ preventDefault });
-  assert.match(document.querySelector('#account-identity').textContent, /Мария/);
-  assert.equal(document.querySelector('#account-identity a').getAttribute('href'), '#/@maria');
+  assert.equal(document.querySelector('#profile-form').elements.displayName.value, 'Мария');
+  assert.equal(document.querySelector('#account-identity'), null);
   assert.equal(email.elements.email.value, 'unsaved@example.com');
   assert.equal(password.elements.newPassword.value, 'unsaved password');
   assert.equal(dirty, true);
