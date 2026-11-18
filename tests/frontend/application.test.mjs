@@ -6,7 +6,7 @@ import { catalogQuery, changedFilter, parseRoute, privateRoute, safeReturn, shar
 import { saveItem, saveOutfit, uploadedPhoto } from '../../src/frontend/src/save.js';
 import { detail } from '../../src/frontend/src/pages.js';
 import { validatePhoto } from '../../src/frontend/src/editors.js';
-import { itemCard, photo } from '../../src/frontend/src/components.js';
+import { itemCard, photo, choiceField, itemSizes, itemColors } from '../../src/frontend/src/components.js';
 
 const json = (value, status = 200) => new Response(status === 204 ? null : JSON.stringify(value), { status });
 
@@ -169,4 +169,13 @@ test('opening public details directly searches later catalog pages without a pri
   assert.equal(page.title, 'Public coat');
   assert.deepEqual(requests, ['/wardrobe?page=1&pageSize=100', '/wardrobe?page=2&pageSize=100']);
   assert.ok(!page.html.includes('id="delete-resource"'));
+});
+
+test('item choices constrain new values and preserve existing custom values safely', () => {
+  assert.match(choiceField('Размер', 'size', 'M', itemSizes), /value="M" selected/);
+  assert.match(choiceField('Размер', 'size', 'нестандартный', itemSizes), /value="нестандартный" selected/);
+  assert.match(choiceField('Цвет', 'color', 'Белый', itemColors), /value="Белый" selected/);
+  assert.doesNotMatch(choiceField('Цвет', 'color', '<script>', itemColors), /<script>/);
+  assert.match(photo({}), /<svg/);
+  assert.match(photo({}), /Фото не добавлено/);
 });

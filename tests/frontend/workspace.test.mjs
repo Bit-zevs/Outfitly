@@ -7,7 +7,9 @@ const { JSDOM } = createRequire(new URL('../../src/frontend/package.json', impor
 const flush = async () => { for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve)); };
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 function setup(t, request, extras = {}) {
-  const dom = new JSDOM('<form><input name="name"><textarea name="description"></textarea><input name="category" value="Top"><input name="photoMode" value="file"><input name="photoUrl"><button type="submit">Save</button></form>');
+  const dom = new JSDOM('<dialog id="dialog"></dialog><form><input name="name"><textarea name="description"></textarea><input name="category" value="Top"><input name="photoMode" value="file"><input name="photoUrl"><button type="submit">Save</button></form>');
+  dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; };
   const previous = { document: globalThis.document, FormData: globalThis.FormData };
   globalThis.document = dom.window.document; globalThis.FormData = dom.window.FormData;
   t.after(() => { Object.assign(globalThis, previous); dom.window.close(); });
@@ -148,6 +150,8 @@ test('discarding a found draft deletes only that draft and does not save or over
     writes.push([path, options.method]);
   });
   await flush(); document.querySelector('[data-discard]').click(); await flush();
+  assert.deepEqual(writes, [], 'opening confirmation must not delete a draft');
+  document.querySelector('#dialog form').dispatchEvent(new state.dom.window.Event('submit', { cancelable: true })); await flush();
   assert.deepEqual(writes, [['/drafts/draft-id?version=version-1', 'DELETE']]);
   assert.equal(state.form.elements.name.disabled, false); assert.equal(state.form.elements.name.value, '');
 });

@@ -17,6 +17,10 @@ export function showError(element, error, prefix = '') {
 }
 export function busy(form, value) {
   form.setAttribute('aria-busy', String(value));
+  form.querySelectorAll('button[type="submit"], button:not([type])').forEach(button => {
+    if (value && !button.dataset.idleLabel) { button.dataset.idleLabel = button.textContent; button.textContent = /Сохран|Изменить/.test(button.dataset.idleLabel) ? 'Сохраняем…' : /Войти/.test(button.dataset.idleLabel) ? 'Входим…' : /Удалить/.test(button.dataset.idleLabel) ? 'Удаляем…' : 'Отправляем…'; }
+    else if (!value && button.dataset.idleLabel) { button.textContent = button.dataset.idleLabel; delete button.dataset.idleLabel; }
+  });
   form.querySelectorAll('button, input, select, textarea').forEach(el => {
     if (value) { el.dataset.wasDisabled = String(el.disabled); el.disabled = true; }
     else { el.disabled = el.dataset.wasDisabled === 'true'; delete el.dataset.wasDisabled; }
