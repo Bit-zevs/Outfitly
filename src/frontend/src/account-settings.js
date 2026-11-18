@@ -1,14 +1,10 @@
 import { avatarSettings, bindAvatarSettings } from './avatar-settings.js';
 import { ApiError } from './api.js';
 import { passwordConfirmationError } from './auth.js';
-import { avatar, escape, field, link, title } from './components.js';
+import { escape, field, link, title } from './components.js';
 import { profilePath } from './router.js';
 import { copyAddress } from './profiles.js';
 import { busy, showError } from './ui.js';
-
-function identity(user) {
-  return `${avatar(user)}<h2>${escape(user.displayName)}</h2><p>${escape(user.email)}</p><p>${link(profilePath(user.username), `@${user.username}`)}</p><div class="actions">${link(profilePath(user.username), 'Открыть мой профиль', 'btn outline')}<button class="btn outline" id="copy-profile">Копировать ссылку</button></div>`;
-}
 
 const notice = id => `<p class="error" id="${id}-error" role="alert" tabindex="-1" hidden></p><p id="${id}-status" role="status"></p>`;
 const passwordField = (label, name, autocomplete = 'current-password') => field(label, name, '', { type: 'password', required: true, autocomplete, max: 128 });
@@ -16,12 +12,12 @@ const passwordField = (label, name, autocomplete = 'current-password') => field(
 export function accountSettings(ctx) {
   const user = ctx.auth.user;
   let avatarCleanup;
-  return { title: 'Мой аккаунт', html: `<section class="account">${title('Личные данные', 'Мой аккаунт', 'Управляйте профилем и данными для входа.')}
-    <div class="account-panel" id="account-identity">${identity(user)}</div>
-    ${avatarSettings(user)}<section class="account-panel"><h2>Имя и @username</h2><form id="profile-form">${field('Отображаемое имя', 'displayName', user.displayName, { required: true, autocomplete: 'name' })}${field('@username', 'username', user.username, { required: true, max: 31, autocomplete: 'username', hint: '3–30 символов: латиница, цифры и _. Начните с буквы. После смены ника старые ссылки с ним перестанут работать.' })}<label>Описание профиля<textarea name="bio" maxlength="500" rows="4">${escape(user.bio || '')}</textarea></label><p class="muted" id="bio-count">${(user.bio || '').length}/500</p>${notice('profile')}<button class="btn" type="submit">Сохранить профиль</button></form></section>
-    <section class="account-panel"><h2>Электронная почта</h2><p>Текущий адрес: <span id="current-email">${escape(user.email)}</span></p><p>До подтверждения нового адреса работает старый. После подтверждения потребуется войти снова на всех устройствах.</p><p id="pending-email" role="status"></p><form id="email-form">${field('Новый email', 'email', user.pendingEmail || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${passwordField('Текущий пароль', 'emailCurrentPassword')}${notice('email')}<button class="btn" type="submit">Отправить подтверждение</button></form><button class="btn outline" id="cancel-email-change" hidden>Отменить смену почты</button></section>
+  return { title: 'Настройки', html: `<section class="account">${title('Личный кабинет', 'Настройки', 'Управляйте профилем и данными для входа.')}
+
+    <section class="account-panel profile-editor"><h2>Профиль</h2>${avatarSettings(user)}<div class="profile-details"><h3>Имя и описание</h3><form id="profile-form">${field('Отображаемое имя', 'displayName', user.displayName, { required: true, autocomplete: 'name' })}${field('@username', 'username', user.username, { required: true, max: 31, autocomplete: 'username', hint: '3–30 символов: латиница, цифры и _. Начните с буквы. После смены ника старые ссылки с ним перестанут работать.' })}<label class="field">Описание профиля<textarea name="bio" maxlength="500" rows="4">${escape(user.bio || '')}</textarea></label><p class="muted" id="bio-count">${(user.bio || '').length}/500</p>${notice('profile')}<button class="btn" type="submit">Сохранить профиль</button></form></div></section>
+    <section class="account-panel"><h2>Электронная почта</h2><p>Текущий адрес: <span id="current-email">${escape(user.email)}</span></p><p>До подтверждения нового адреса работает старый. После подтверждения потребуется войти снова на всех устройствах.</p><p id="pending-email" role="status"></p><form id="email-form">${field('Новый email', 'email', user.pendingEmail || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${passwordField('Текущий пароль', 'emailCurrentPassword')}${notice('email')}<button class="btn" type="submit">Подтвердить новый адрес</button></form><button class="btn outline" id="cancel-email-change" hidden>Отменить смену почты</button></section>
     <section class="account-panel"><h2>Пароль</h2><p>После смены пароля потребуется войти снова на всех устройствах.</p><form id="password-form">${passwordField('Текущий пароль', 'currentPassword')}${passwordField('Новый пароль', 'newPassword', 'new-password')}${passwordField('Повторите новый пароль', 'passwordConfirmation', 'new-password')}<label class="check-label"><input type="checkbox" id="show-settings-passwords">Показать пароли</label>${notice('password')}<button class="btn" type="submit">Изменить пароль</button></form></section>
-    <div class="account-panel"><p class="error" id="logout-error" role="alert" tabindex="-1" hidden></p><button class="btn outline danger" id="logout">Выйти из аккаунта ↗</button></div></section>`, bind() {
+    <div class="account-panel"><p class="error" id="logout-error" role="alert" tabindex="-1" hidden></p><button class="btn outline danger" id="logout">Выйти из аккаунта</button></div></section>`, bind() {
       const dirty = new Set();
       let saving = false;
       const forms = ['profile', 'email', 'password'].map(id => document.querySelector(`#${id}-form`));
@@ -29,8 +25,6 @@ export function accountSettings(ctx) {
       for (const form of forms) form.oninput = () => { dirty.add(form); ctx.setDirty?.(true); };
 
       function updateIdentity() {
-        document.querySelector('#account-identity').innerHTML = identity(ctx.auth.user);
-        document.querySelector('#copy-profile').onclick = () => copyAddress(`${location.origin}/#${profilePath(ctx.auth.user.username)}`, ctx);
         const pending = ctx.auth.user.pendingEmail;
         document.querySelector('#pending-email').textContent = pending ? `Ожидает подтверждения: ${pending}. Ссылка действует 24 часа. Для повторной отправки введите текущий пароль.` : '';
         document.querySelector('#cancel-email-change').hidden = !pending;
@@ -117,7 +111,7 @@ export function accountSettings(ctx) {
 export function confirmEmailChangePage(ctx) {
   const token = ctx.route.query.get('token');
   const success = ctx.route.query.get('confirmed') === '1';
-  return { title: 'Смена электронной почты', html: `<section class="account"><h1>Смена электронной почты</h1><p id="email-change-status" role="status">${success ? 'Адрес изменён. Все сессии аккаунта завершены. Войдите с новой почтой и вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить новый адрес и завершить все сессии аккаунта.' : 'Ссылка недействительна. Запросите новое письмо в аккаунте.'}</p>${token ? '<form id="confirm-email-change-form"><button class="btn" type="submit">Подтвердить новый адрес</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${link('/account', 'Настройки аккаунта', 'btn outline')}</div></section>`, bind() {
+  return { title: 'Смена электронной почты', html: `<section class="account"><h1>Смена электронной почты</h1><p id="email-change-status" role="status">${success ? 'Адрес изменён. Все сессии аккаунта завершены. Войдите с новой почтой и вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить новый адрес и завершить все сессии аккаунта.' : 'Ссылка недействительна. Запросите новое письмо в аккаунте.'}</p>${token ? '<form id="confirm-email-change-form"><button class="btn" type="submit">Подтвердить новый адрес</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${link('/settings', 'Настройки аккаунта', 'btn outline')}</div></section>`, bind() {
     const form = document.querySelector('#confirm-email-change-form');
     if (!form) return;
     form.onsubmit = async event => {

@@ -81,3 +81,9 @@ test('auth confirmation and resend use anonymous POST bodies without creating lo
   ]);
   assert.equal(auth.user, null);
 });
+
+test('confirmed users and successful confirmation do not offer another email', () => {
+  const ctx = { auth: { user: { email: 'confirmed@example.test' } }, route: parseRoute('#/check-email') };
+  assert.doesNotMatch(checkEmailPage(ctx).html, /resend-form/);
+  assert.doesNotMatch(confirmEmailPage({ ...ctx, route: parseRoute('#/confirm-email?confirmed=1') }).html, /Получить новое письмо/);
+});

@@ -1,12 +1,13 @@
+import { enhanceChoices, installChoices } from './choices.js';
 import { supportPage } from './support.js';
 import { calendarPage } from './calendar.js';
 import { statisticsPage } from './statistics.js';
 import { createDraftSession, favoritesPage, draftsPage } from './workspace.js';
-import { confirmEmailChangePage } from './account-settings.js';
+import { accountSettings, confirmEmailChangePage } from './account-settings.js';
 import { profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
-import { avatar, escape, link } from './components.js';
+import { avatar, escape, link, photoPlaceholder } from './components.js';
 import { itemEditor, outfitEditor } from './editors.js';
 import { account, authPage, dashboard, detail, discover, home, notFound, outfitsPage, wardrobe } from './pages.js';
 import { parseRoute, privateRoute } from './router.js';
@@ -22,6 +23,7 @@ let cleanup;
 let version = 0;
 let acceptedHash = location.hash || '#/';
 let authRestored = false;
+let renderedRoute;
 const api = createApi(undefined, () => {
   auth.clear(); dirty = false; saving = false;
   toast('Сессия завершилась. Войдите снова.');
@@ -38,11 +40,15 @@ function navigate(path, replace = false) {
 }
 
 function header(route) {
-  const nav = auth.user ? [['/dashboard', 'Обзор'], ['/statistics', 'Статистика'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/calendar', 'Календарь'], ['/discover', 'Открытая коллекция'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики'], ['/support', 'Поддержка']] : [['/', 'Главная'], ['/discover', 'Открытая коллекция']];
-  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${nav.map(([path, name]) => `<a href="#${path}" ${route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/') ? 'aria-current="page"' : ''}>${name}</a>`).join('')}</nav><div class="header-account">${auth.user ? `<a href="#/account" class="avatar" aria-label="Мой аккаунт: ${escape(auth.user.displayName)}">${avatar(auth.user)}</a>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать ↗', 'btn small')}`}</div></div>`;
+  const nav = auth.user
+    ? { primary: [['/dashboard', 'Обзор'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция']], secondary: [['/statistics', 'Статистика'], ['/calendar', 'Календарь'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики'], ['/support', 'Поддержка']] }
+    : { primary: [['/', 'Главная'], ['/discover', 'Открытая коллекция']], secondary: [] };
+  const isCurrent = path => route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/');
+  const renderLinks = links => links.map(([path, name]) => `<a href="#${path}" ${isCurrent(path) ? 'aria-current="page"' : ''}>${name}</a>`).join('');
+  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля">${renderLinks([['/account', 'Мой профиль'], ['/settings', 'Настройки'], ...nav.secondary])}</nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
-  button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); document.querySelector('#primary-nav').classList.toggle('open', open); };
-  document.querySelector('#primary-nav').onkeydown = event => { if (event.key === 'Escape') { button.setAttribute('aria-expanded', 'false'); document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
+  button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); button.textContent = open ? '×' : '☰'; document.querySelector('#primary-nav').classList.toggle('open', open); };
+  document.querySelector('#header').onkeydown = event => { if (event.key === 'Escape') { const profile = document.querySelector('.profile-menu'); if (profile?.open) { profile.open = false; profile.querySelector('summary').focus(); return; } button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', 'Открыть меню'); button.textContent = '☰'; document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
 }
 
 async function resolve(ctx) {
@@ -64,6 +70,7 @@ async function resolve(ctx) {
   if (parts[0] === 'support' && parts.length <= 2) return supportPage(ctx, false, parts[1]);
   if (parts[0] === 'admin' && parts[1] === 'support' && parts.length <= 3) return supportPage(ctx, true, parts[2]);
   if (path === '/account') return account(ctx);
+  if (path === '/settings') return accountSettings(ctx);
   if (parts[0]?.startsWith('@')) {
     const username = decodeURIComponent(parts[0].slice(1));
     if (parts.length === 1) return profilePage(ctx, username);
@@ -78,6 +85,10 @@ async function resolve(ctx) {
 }
 
 async function render() {
+  const nextRoute = parseRoute(location.hash);
+  const preserve = renderedRoute?.path === nextRoute.path && ['/wardrobe', '/discover'].includes(nextRoute.path) && renderedRoute.query.get('tab') === nextRoute.query.get('tab') && renderedRoute.query.get('page') === nextRoute.query.get('page');
+  const scroll = window.scrollY;
+  const focusId = document.activeElement?.id;
   const mine = ++version;
   controller?.abort(); controller = new AbortController();
   cleanup?.(); cleanup = null;
@@ -143,8 +154,32 @@ document.addEventListener('error', event => {
   if (event.target instanceof HTMLImageElement) {
     const img = event.target;
     if (img.closest('.user-avatar')) { img.remove(); return; }
-    const placeholder = document.createElement('span'); placeholder.className = 'photo-placeholder'; placeholder.textContent = '◇'; placeholder.setAttribute('role', 'img'); placeholder.setAttribute('aria-label', img.alt ? `Фото недоступно: ${img.alt}` : 'Фото недоступно'); img.replaceWith(placeholder);
+    const placeholder = document.createElement('span'); placeholder.className = 'photo-placeholder'; placeholder.innerHTML = photoPlaceholder(); placeholder.setAttribute('role', 'img'); placeholder.setAttribute('aria-label', img.alt ? `Фото недоступно: ${img.alt}` : 'Фото недоступно'); img.replaceWith(placeholder);
   }
 }, true);
 document.querySelector('.skip-link').onclick = event => { event.preventDefault(); content.focus(); };
 render();
+
+// Keep native constraint validation and provide persistent, associated field errors.
+document.addEventListener('invalid', event => {
+  const input = event.target;
+  if (!input.matches('input,textarea,select') || !input.id) return;
+  if (input.tagName === 'SELECT' && input.hidden) { event.preventDefault(); input.parentElement.querySelector('.choice-trigger')?.focus(); }
+  const id = input.id + '-validation';
+  let notice = document.getElementById(id);
+  if (!notice) { notice = document.createElement('small'); notice.id = id; notice.className = 'field-error'; input.after(notice); }
+  notice.textContent = input.validationMessage;
+  input.setAttribute('aria-invalid', 'true');
+  const descriptions = new Set((input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean));
+  descriptions.add(id); input.setAttribute('aria-describedby', [...descriptions].join(' '));
+}, true);
+document.addEventListener('input', event => {
+  const input = event.target;
+  if (!input.id || !input.matches('input,textarea,select')) return;
+  const notice = document.getElementById(input.id + '-validation');
+  if (notice) { notice.remove(); input.removeAttribute('aria-invalid'); input.setAttribute('aria-describedby', (input.getAttribute('aria-describedby') || '').split(' ').filter(id => id !== notice.id).join(' ')); }
+});
+
+installChoices(document);
+
+document.addEventListener('click', event => { const menu = document.querySelector('.profile-menu[open]'); if (menu && !menu.contains(event.target)) menu.open = false; });

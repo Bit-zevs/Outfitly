@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { accountSettings } from '../../src/frontend/src/account-settings.js';
 import { account, authPage, detail, discover } from '../../src/frontend/src/pages.js';
 import { peoplePage, profilePage } from '../../src/frontend/src/profiles.js';
 import { createAuth } from '../../src/frontend/src/auth.js';
@@ -95,7 +96,7 @@ test('renaming updates the auth user and refreshed profile links; conflict prese
   } });
   await auth.restore();
   const ctx = { auth, isCurrent: () => true, updateHeader() { refreshes++; }, toast() {} };
-  mount(t, account(ctx));
+  mount(t, accountSettings(ctx));
   const form = document.querySelector('#profile-form'); form.elements.username.value = 'new_anna';
   await form.onsubmit({ preventDefault });
   assert.match(document.querySelector('#profile-error').textContent, /уже занят/);
@@ -105,5 +106,12 @@ test('renaming updates the auth user and refreshed profile links; conflict prese
   await form.onsubmit({ preventDefault });
   assert.equal(refreshes, 2);
   assert.equal(auth.user.username, 'new_anna');
-  assert.match(account(ctx).html, /href="#\/@new_anna"/);
+  assert.match(accountSettings(ctx).html, /value="new_anna"/);
+});
+
+test('personal profile shows a collection without settings controls', async () => {
+ const page=await account({auth:{user:{username:'anna'}},route:parseRoute('#/account'), get:async path=>path==='/users/anna'?{username:'anna',displayName:'Анна',bio:'Мой стиль'}:{items:[],total:0,page:1,pageSize:20}});
+ assert.match(page.html,/Мой стиль/);assert.ok(!page.html.includes('href="#/settings"'));
+ assert.doesNotMatch(page.html,/id="profile-form"|id="password-form"|id="avatar-form"/);
+ assert.equal(privateRoute('/settings'),true);
 });

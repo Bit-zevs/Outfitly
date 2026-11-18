@@ -2,6 +2,7 @@ import { field, link } from './components.js';
 import { busy } from './ui.js';
 
 export function checkEmailPage(ctx) {
+  if (ctx.auth?.user) return { title: 'Почта подтверждена', html: `<section class="account"><h1>Почта подтверждена</h1><p class="lead">Вы уже вошли в аккаунт. Повторное подтверждение не требуется.</p>${link('/settings', 'Настройки аккаунта', 'btn')}</section>` };
   const email = ctx.route.query.get('email') || '';
   const failed = ctx.route.query.get('sent') === '0';
   const returnTo = ctx.route.query.get('return');
@@ -25,7 +26,7 @@ export function checkEmailPage(ctx) {
 export function confirmEmailPage(ctx) {
   const token = ctx.route.query.get('token');
   const success = ctx.route.query.get('confirmed') === '1';
-  return { title: 'Подтверждение почты', html: `<section class="account"><h1>Подтверждение почты</h1><p id="confirmation-status" role="status">${success ? 'Почта подтверждена. Войдите с вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить электронную почту.' : 'Ссылка недействительна. Запросите новое письмо.'}</p>${token ? '<form id="confirm-email-form"><button class="btn" type="submit">Подтвердить почту</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${link('/check-email', 'Получить новое письмо', 'btn outline')}</div></section>`, bind() {
+  return { title: 'Подтверждение почты', html: `<section class="account"><h1>Подтверждение почты</h1><p id="confirmation-status" role="status">${success ? 'Почта подтверждена. Войдите с вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить электронную почту.' : 'Ссылка недействительна. Запросите новое письмо.'}</p>${token ? '<form id="confirm-email-form"><button class="btn" type="submit">Подтвердить почту</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${!success && !ctx.auth?.user ? link('/check-email', 'Получить новое письмо', 'btn outline') : ''}</div></section>`, bind() {
     const form = document.querySelector('#confirm-email-form');
     if (!form) return;
     form.onsubmit = async event => {
