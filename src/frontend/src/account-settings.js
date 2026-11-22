@@ -111,7 +111,7 @@ export function accountSettings(ctx) {
 export function confirmEmailChangePage(ctx) {
   const token = ctx.route.query.get('token');
   const success = ctx.route.query.get('confirmed') === '1';
-  return { title: 'Смена электронной почты', html: `<section class="account"><h1>Смена электронной почты</h1><p id="email-change-status" role="status">${success ? 'Адрес изменён. Все сессии аккаунта завершены. Войдите с новой почтой и вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить новый адрес и завершить все сессии аккаунта.' : 'Ссылка недействительна. Запросите новое письмо в аккаунте.'}</p>${token ? '<form id="confirm-email-change-form"><button class="btn" type="submit">Подтвердить новый адрес</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${link('/settings', 'Настройки аккаунта', 'btn outline')}</div></section>`, bind() {
+  return { title: 'Смена электронной почты', html: `<section class="account email-flow"><h1>Смена электронной почты</h1><p id="email-change-status" role="status">${success ? 'Адрес изменён. Все сессии аккаунта завершены. Войдите с новой почтой и вашим паролем.' : token ? 'Нажмите кнопку, чтобы подтвердить новый адрес и завершить все сессии аккаунта.' : 'Ссылка недействительна. Запросите новое письмо в аккаунте.'}</p>${token ? '<form id="confirm-email-change-form"><button class="btn" type="submit">Подтвердить новый адрес</button></form>' : ''}<div class="actions">${link('/login', 'Войти', 'btn outline')}${link('/settings', 'Настройки аккаунта', 'btn outline')}</div></section>`, bind() {
     const form = document.querySelector('#confirm-email-change-form');
     if (!form) return;
     form.onsubmit = async event => {

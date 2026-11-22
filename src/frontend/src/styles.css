@@ -2427,3 +2427,13 @@ input,textarea,select,button,a { scroll-margin-block: 100px; }
  .catalog-results .field { flex-basis: auto; }
  .calendar-day { min-width: 0; }
 }
+
+.email-flow { max-width: 780px; }
+.email-flow h1 { font-size: clamp(32px,4vw,48px); }
+.email-flow > form { margin: 24px 0; }
+.email-flow > .actions { margin-top: 24px; gap: 12px; }
+.email-flow > form + .actions { padding-top: 20px; border-top: 1px solid var(--line); }
+.email-flow [role="status"] { line-height: 1.7; }
+.item-visibility { border: 1px solid var(--line); border-radius: 16px; padding: 18px; margin: 0 0 24px; }
+.item-visibility .check-label { margin-bottom: 8px; min-height: 44px; }
+@media(max-width:600px) { .email-flow .actions { align-items: stretch; flex-direction: column; } .email-flow form > .btn { width: 100%; } }

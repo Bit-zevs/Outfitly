@@ -12,7 +12,7 @@ public static class ResourceVersion
 }
 public sealed record DraftContent(string? Name = null, string? Description = null, ClothingCategory? Category = null,
     string? Color = null, string? Size = null, string? Brand = null, string? PhotoUrl = null,
-    string PhotoMode = "file", bool RemovePhoto = false, IReadOnlyList<Guid>? ItemIds = null);
+    string PhotoMode = "file", bool RemovePhoto = false, IReadOnlyList<Guid>? ItemIds = null, bool IsPublic = false);
 public sealed record DraftInput(string Kind, Guid? TargetId, Guid? Version, string? BaseVersion, DraftContent Content);
 public sealed record DraftView(Guid Id, string Kind, Guid? TargetId, Guid Version, string? BaseVersion,
     DateTime UpdatedAtUtc, DraftContent Content, string? PhotoUrl, Guid? CompletedId);
@@ -187,6 +187,7 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
             else if (content.PhotoMode == "url" && string.IsNullOrEmpty(url) || content.PhotoMode == "file" && content.RemovePhoto) { changes.RemoveAfterCommit(item.PhotoStorageKey); item.RemovePhoto(); }
             if (content.PhotoMode != "file" || content.RemovePhoto) changes.RemoveAfterCommit(d.PhotoStorageKey);
             if (d.TargetId.HasValue) store.MarkItemChanged(item);
+            if (!d.TargetId.HasValue && content.IsPublic) commands.SetPublication(actor, ShareTargetType.WardrobeItem, item.Id, true);
             result = item.Id;
         }
         else

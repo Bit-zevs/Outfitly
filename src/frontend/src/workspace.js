@@ -59,13 +59,14 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
   const request = (path, options) => ctx.api.request(path, options);
   function snapshot() {
     const value = name => form.elements[name]?.value || null;
-    return kind === 'items' ? { name: value('name'), description: value('description'), category: value('category'), color: value('color'), size: value('size'), brand: value('brand'), photoUrl: value('photoUrl'), photoMode: form.elements.photoMode.value, removePhoto: draft.removePhoto }
+    return kind === 'items' ? { name: value('name'), description: value('description'), category: value('category'), color: value('color'), size: value('size'), brand: value('brand'), photoUrl: value('photoUrl'), photoMode: form.elements.photoMode.value, removePhoto: draft.removePhoto, isPublic: !id && form.elements.visibility?.value === 'public' }
       : { name: value('name'), description: value('description'), itemIds: draft.selected.map(x => x.id), photoMode: 'file' };
   }
   async function apply(remote) {
     const content = remote.content;
     for (const name of ['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl']) if (form.elements[name]) { const control = form.elements[name], value = content[name] || ''; if (control.tagName === 'SELECT' && value && ![...control.options].some(option => option.value === value)) { const option = document.createElement('option'); option.value = value; option.textContent = value; control.append(option); } control.value = value; control.dispatchEvent(new control.ownerDocument.defaultView.Event('change')); }
     if (kind === 'items') {
+      if (form.elements.visibility) form.elements.visibility.value = content.isPublic ? 'public' : 'private';
       form.elements.photoMode.value = content.photoMode; draft.photoMode = content.photoMode; draft.file = null; uploadedFile = null;
       draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl;
     } else {
@@ -113,7 +114,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     };
   }
   function changedLocally(event) {
-    if (event?.target && !['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl', 'photoMode'].includes(event.target.name) && event.target.id !== 'file') return;
+    if (event?.target && !['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl', 'photoMode', 'visibility'].includes(event.target.name) && event.target.id !== 'file') return;
     if (!active() || completed) return;
     generation++; ctx.setDirty(true); clearTimeout(timer);
     if (blocked || finalizing) return;

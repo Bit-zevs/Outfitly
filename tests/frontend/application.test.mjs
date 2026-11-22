@@ -179,3 +179,12 @@ test('item choices constrain new values and preserve existing custom values safe
   assert.match(photo({}), /<svg/);
   assert.match(photo({}), /Фото не добавлено/);
 });
+
+test('creation publishes after photo saving and retries without creating another item', async () => {
+ const calls=[];let fail=true;
+ const draft={publishOnCreate:true,isPublic:true,photoMode:'file',values:{name:'Coat',category:'Outerwear'}};
+ const api={request:async(path,options={})=>{calls.push([path,options]);if(path==='/items')return{id:'created'};if(path.endsWith('/publication')&&fail){fail=false;throw new ApiError(503);}}};
+ await assert.rejects(saveItem(api,draft));await saveItem(api,draft);
+ assert.equal(calls.filter(([path])=>path==='/items').length,1);
+ assert.deepEqual(calls.at(-1)[1].body,{isPublic:true});
+});

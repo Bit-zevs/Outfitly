@@ -23,6 +23,10 @@ export async function saveItem(api, draft) {
     draft.baseline = await api.request(`/items/${draft.id}/photo`, { method: 'PUT', body: form });
     draft.file = null;
   }
+  if (draft.publishOnCreate && draft.isPublic && !draft.publicationSaved) {
+    await api.request(`/items/${draft.id}/publication`, { method: 'PATCH', body: { isPublic: true } });
+    draft.publicationSaved = true;
+  }
   return draft.id;
 }
 export async function saveOutfit(api, draft) {
