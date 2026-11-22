@@ -11,6 +11,25 @@ namespace Outfitly.Tests.Api;
 public sealed class WorkspaceApiTests
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task New_item_visibility_is_saved_only_on_explicit_draft_completion(bool isPublic)
+    {
+        using var factory = new ApiFactory(testAuthentication: false); await factory.InitializeDatabaseAsync();
+        using var owner = await SocialProfileApiTests.Register(factory, "visibility");
+        var id = Guid.NewGuid();
+        var draft = await PutDraft(owner, id, new("items", null, null, null,
+            new(Name: "Coat", Category: ClothingCategory.Outerwear, IsPublic: isPublic)));
+        Assert.Equal(isPublic, (await owner.GetFromJsonAsync<DraftView>($"/api/drafts/{id}", Json))!.Content.IsPublic);
+        using (var before = factory.Services.CreateScope())
+            Assert.Empty(await before.ServiceProvider.GetRequiredService<OutfitlyDbContext>().WardrobeItems.ToArrayAsync());
+        var saved = await owner.PostAsJsonAsync($"/api/drafts/{id}/save", new { version = draft.Version });
+        saved.EnsureSuccessStatusCode();
+        using var after = factory.Services.CreateScope();
+        var item = Assert.Single(await after.ServiceProvider.GetRequiredService<OutfitlyDbContext>().WardrobeItems.ToArrayAsync());
+        Assert.Equal(isPublic, item.IsPublic);
+    }
     [Fact]
     public async Task Favorites_recheck_access_keep_private_tombstones_and_never_share_another_accounts_list()
     {

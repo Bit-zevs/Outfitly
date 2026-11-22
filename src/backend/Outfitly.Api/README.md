@@ -411,7 +411,9 @@ route может содержать действующую сохранённу�
 
 PUT черновика принимает kind, targetId (nullable), version (null при создании),
 baseVersion и content. Content: name, description, category (nullable), color, size,
-brand, photoUrl, photoMode (file/url), removePhoto, itemIds. Поля могут быть неполными;
+brand, photoUrl, photoMode (file/url), removePhoto, itemIds, isPublic (по умолчанию false).
+Для новой вещи isPublic применяется только при явном save; автосохранение не публикует вещь.
+Для существующей вещи публичность меняется отдельной командой publication. Поля могут быть неполными;
 полная доменная валидация выполняется при save. Сериализованные данные до 65536
 символов, состав до 1000 ID. Ответ: id, kind, targetId, version, baseVersion,
 updatedAtUtc, content, photoUrl, completedId. Ключи файлов не раскрываются.
