@@ -30,9 +30,9 @@ export function modal(heading, content, bind = () => {}) {
   if (!focusGuardInstalled) {
     document.addEventListener('keydown', event => {
       const activeDialog = document.querySelector('#dialog');
-      if (event.key !== 'Tab' || !activeDialog.open) return;
+      if (event.defaultPrevented || event.key !== 'Tab' || !activeDialog.open) return;
       const focusable = [...activeDialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')]
-        .filter(element => !element.disabled && element.getClientRects().length);
+        .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length);
       if (!focusable.length) { event.preventDefault(); return; }
       const current = focusable.indexOf(document.activeElement);
       const next = current < 0 ? (event.shiftKey ? focusable.length - 1 : 0) : (current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;

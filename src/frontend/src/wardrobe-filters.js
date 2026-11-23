@@ -1,4 +1,22 @@
-import { categories, escape, link } from './components.js';
+import { categories, escape } from './components.js';
+
+const filterLabels = {
+  search: 'Поиск', category: 'Категория', color: 'Цвет', brand: 'Бренд', size: 'Размер',
+  publication: 'Публикация', colorMissing: 'Цвет', brandMissing: 'Бренд', sizeMissing: 'Размер'
+};
+
+export function activeWardrobeFilters(query) {
+  return Object.keys(filterLabels).flatMap(key => {
+    const value = query.get(key);
+    if (!value?.trim() || (key.endsWith('Missing') && value !== 'true') ||
+        (key === 'publication' && !['public', 'private'].includes(value))) return [];
+    const description = key.endsWith('Missing') ? 'Не указан'
+      : key === 'category' ? categories[value] || value
+      : key === 'publication' ? (value === 'public' ? 'Опубликованные' : 'Личные')
+      : value;
+    return [{ key, label: filterLabels[key] + ': ' + description }];
+  });
+}
 
 export function wardrobeQuery(query) {
   const result = new URLSearchParams();
@@ -17,15 +35,26 @@ export function wardrobeFilters(route, options, total) {
     if (selected && !entries.some(([key]) => key === selected)) entries.push([selected, selected === 'missing' ? 'Не указан' : query.get(name)]);
     return select(name, label, entries, selected);
   };
-  const labels = { search: 'Поиск', category: 'Категория', color: 'Цвет', brand: 'Бренд', size: 'Размер', publication: 'Публикация', colorMissing: 'Цвет', brandMissing: 'Бренд', sizeMissing: 'Размер' };
-  const active = [...query].filter(([key, value]) => labels[key] && value && !(key === 'publication' && value === 'all'));
-  const advanced = active.some(([key]) => !['search', 'category'].includes(key));
-  const selected = active.map(([key, value]) => escape(labels[key] + ': ' + (key.endsWith('Missing') ? 'Не указан' : key === 'category' ? categories[value] || value : key === 'publication' ? (value === 'public' ? 'Опубликованные' : 'Личные') : value))).join('</span><span class="badge">');
-  const removable = active.map(([key]) => {
-    const remaining = new URLSearchParams(query); remaining.delete(key); remaining.delete('page');
-    return link('/wardrobe?' + remaining.toString(), 'Убрать: ' + labels[key], 'badge filter-remove');
+  const active = activeWardrobeFilters(query);
+  const advanced = active.some(({ key }) => !['search', 'category'].includes(key));
+  const removable = active.map(({ key, label }) => {
+    const remaining = new URLSearchParams(query);
+    remaining.delete(key);
+    remaining.delete('page');
+    const path = remaining.size ? '/wardrobe?' + remaining : '/wardrobe';
+    return `<a class="badge filter-remove" href="#${escape(path)}" data-filter-focus="remove-${key}" aria-label="${escape(label + '. Убрать фильтр')}"><span>${escape(label)}</span><span aria-hidden="true">×</span></a>`;
   }).join('');
-  return `<form id="wardrobe-filters" class="wardrobe-filters" role="search"><label class="field">Поиск<input type="search" name="search" data-filter-focus="search" autocomplete="off" placeholder="Название, бренд или описание…" value="${escape(query.get('search'))}"></label>${select('category', 'Категория', [['', 'Все'], ...Object.entries(categories)], query.get('category') || '')}<details class="advanced-filters" ${advanced ? 'open' : ''}><summary><span class="filter-title">Фильтры</span><span class="filter-hint">Цвет, размер, бренд и публикация</span><span class="filter-toggle" aria-hidden="true"></span></summary><div class="filter-fields">${attribute('color', 'Цвет', options.colors)}${attribute('brand', 'Бренд', options.brands)}${attribute('size', 'Размер', options.sizes)}${select('publication', 'Публикация', [['all', 'Все'], ['public', 'Опубликованные'], ['private', 'Личные']], query.get('publication') || 'all')}</div></details><div class="actions"><button class="btn" type="submit" data-filter-focus="submit">Применить</button>${link('/wardrobe', 'Сбросить', 'btn outline')}</div><div class="active-filters" aria-label="Активные условия">${active.length ? `<span class="badge">${selected}</span>${removable}` : ''}</div><div class="catalog-results"><p class="muted" role="status">Найдено: ${total}</p>${select('sort', 'Порядок', [['nameAsc', 'По имени: А–Я'], ['nameDesc', 'По имени: Я–А'], ['newest', 'Сначала новые']], query.get('sort') || 'nameAsc')}</div></form>`;
+  return `<form id="wardrobe-filters" class="wardrobe-filters" role="search">
+    <label class="field">Поиск<input type="search" name="search" data-filter-focus="search" autocomplete="off" placeholder="Например, тренч…" value="${escape(query.get('search'))}"></label>
+    ${select('category', 'Категория', [['', 'Все'], ...Object.entries(categories)], query.get('category') || '')}
+    <details class="advanced-filters" ${advanced ? 'open' : ''}>
+      <summary data-filter-focus="advanced">Дополнительные фильтры<span class="filter-toggle" aria-hidden="true"></span></summary>
+      <div class="filter-fields">${attribute('color', 'Цвет', options.colors)}${attribute('brand', 'Бренд', options.brands)}${attribute('size', 'Размер', options.sizes)}${select('publication', 'Публикация', [['all', 'Все'], ['public', 'Опубликованные'], ['private', 'Личные']], query.get('publication') || 'all')}</div>
+    </details>
+    <div class="filter-actions"><button class="btn" type="submit" data-filter-focus="submit">Применить</button><a class="btn outline" href="#/wardrobe" data-filter-focus="reset">Сбросить фильтры</a></div>
+    ${removable ? `<div class="active-filters" role="group" aria-label="Активные фильтры">${removable}</div>` : ''}
+    <div class="catalog-results"><p class="muted" role="status">Найдено: ${total}</p>${select('sort', 'Сортировка', [['nameAsc', 'По имени: А–Я'], ['nameDesc', 'По имени: Я–А'], ['newest', 'Сначала новые']], query.get('sort') || 'nameAsc')}</div>
+  </form>`;
 }
 export function bindWardrobeFilters(ctx) {
   const form = document.querySelector('#wardrobe-filters');

@@ -42,8 +42,8 @@ test('wardrobe loads options and filtered page and offers reset on zero matches'
   await assert.rejects(wardrobe({ route: parseRoute('#/wardrobe'), get: async () => { throw new Error('offline'); } }), /offline/);
 });
 
-test('an empty first wardrobe offers adding a first item', async () => {
-  const page = await wardrobe({ route: parseRoute('#/wardrobe'), get: async path => path === '/items/filter-options' ? { colors: [], brands: [], sizes: [] } : { items: [], total: 0, page: 1, pageSize: 20 } });
+test('an empty wardrobe offers adding a first item even with a sort applied', async () => {
+  const page = await wardrobe({ route: parseRoute('#/wardrobe?sort=nameDesc'), get: async path => path === '/items/filter-options' ? { colors: [], brands: [], sizes: [] } : { items: [], total: 0, page: 1, pageSize: 20 } });
   assert.match(page.html, /Гардероб начинается с одной вещи/);
   assert.doesNotMatch(page.html, /Ничего не найдено/);
 });
@@ -54,5 +54,9 @@ test('advanced selections stay visible when returning to a filtered wardrobe', (
   assert.equal(document.querySelector('details').open, true);
   assert.match(document.querySelector('.active-filters').textContent, /Цвет: Белый/);
   assert.match(document.querySelector('.active-filters').textContent, /Бренд: Не указан/);
+  const chips = [...document.querySelector('.active-filters').children];
+  assert.equal(chips.length, 2);
+  assert.match(chips[0].getAttribute('aria-label'), /Цвет: Белый.*Убрать фильтр/);
+  assert.equal(chips[0].getAttribute('href'), '#/wardrobe?brandMissing=true');
   dom.window.close();
 });

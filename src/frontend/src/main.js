@@ -45,7 +45,7 @@ function header(route) {
     : { primary: [['/', 'Главная'], ['/discover', 'Открытая коллекция']], secondary: [] };
   const isCurrent = path => route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/');
   const renderLinks = links => links.map(([path, name]) => `<a href="#${path}" ${isCurrent(path) ? 'aria-current="page"' : ''}>${name}</a>`).join('');
-  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/people', 'Люди'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
+  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}${auth.user ? '' : link('/register', 'Зарегистрироваться', 'mobile-register')}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/people', 'Люди'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); button.textContent = open ? '×' : '☰'; document.querySelector('#primary-nav').classList.toggle('open', open); };
   document.querySelector('#header').onkeydown = event => { if (event.key === 'Escape') { const profile = document.querySelector('.profile-menu'); if (profile?.open) { profile.open = false; profile.querySelector('summary').focus(); return; } if (button.getAttribute('aria-expanded') !== 'true') return; button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', 'Открыть меню'); button.textContent = '☰'; document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
@@ -89,7 +89,10 @@ async function resolve(ctx) {
 
 async function render() {
   const nextRoute = parseRoute(location.hash);
-  const preserve = renderedRoute?.path === nextRoute.path && ['/wardrobe', '/discover'].includes(nextRoute.path) && renderedRoute.query.get('tab') === nextRoute.query.get('tab') && (renderedRoute.query.get('page') || '1') === (nextRoute.query.get('page') || '1');
+  const preserve = renderedRoute?.path === nextRoute.path &&
+    ['/wardrobe', '/outfits', '/discover'].includes(nextRoute.path) &&
+    renderedRoute.query.get('tab') === nextRoute.query.get('tab') &&
+    (nextRoute.query.get('page') === renderedRoute.query.get('page') || (nextRoute.query.get('page') || '1') === '1');
   const scroll = window.scrollY;
   const focusKey = document.activeElement?.closest('[data-filter-focus]')?.dataset.filterFocus;
   const mine = ++version;
@@ -124,15 +127,27 @@ async function render() {
     cleanup = page.cleanup;
     page.bind?.();
     renderedRoute = route;
-    const filterFocus = preserve && (Array.from(content.querySelectorAll('[data-filter-focus]'))
-      .find(element => !element.hidden && element.dataset.filterFocus === focusKey) || content.querySelector('[type="search"]'));
+    const filterFocus = preserve && focusKey
+      ? [...content.querySelectorAll('[data-filter-focus]')].find(element =>
+        element.dataset.filterFocus === focusKey && !element.hidden &&
+        (!element.closest('details:not([open])') || element.matches('details > summary:first-child'))
+      ) || content.querySelector('[type="search"]')
+      : null;
     (filterFocus || content).focus({ preventScroll: true });
-    window.scrollTo({ top: preserve ? scroll : 0, behavior: 'instant' });
+    window.scrollTo({ top: filterFocus ? scroll : 0, behavior: 'instant' });
+    filterFocus?.scrollIntoView?.({ block: 'nearest' });
   } catch (error) {
     if (!isCurrent() || error.name === 'AbortError') return;
     renderedRoute = null;
     if (error.status === 404) { const page = notFound(route.parts[0] === 'shared'); content.innerHTML = page.html; document.title = `${page.title} — Outfitly`; }
-    else { content.innerHTML = `<div class="empty"><h1>Не удалось открыть страницу</h1><p class="lead">${escape(errorMessage(error))}</p><button class="btn" id="retry-page">Попробовать снова</button></div>`; document.querySelector('#retry-page').onclick = render; }
+    else {
+      document.title = 'Не удалось открыть страницу — Outfitly';
+      content.innerHTML = `<div class="empty"><h1>Не удалось открыть страницу</h1><p class="lead">${escape(errorMessage(error))}</p><button class="btn" id="retry-page">Попробовать снова</button></div>`;
+      document.querySelector('#retry-page').onclick = render;
+    }
+    const heading = content.querySelector('h1') || content;
+    heading.tabIndex = -1;
+    heading.focus();
   } finally { if (isCurrent()) content.removeAttribute('aria-busy'); }
 }
 

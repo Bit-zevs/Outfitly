@@ -125,7 +125,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (!active() || completed) return;
     generation++; ctx.setDirty(true); clearTimeout(timer);
     if (blocked || finalizing) return;
-    status('Есть несохранённые изменения…'); timer = setTimeout(() => { flush().catch(showFailure); }, 1000);
+    status('Черновик ещё не сохранён'); timer = setTimeout(() => { flush().catch(showFailure); }, 1000);
   }
   async function flush() {
     clearTimeout(timer);
@@ -145,7 +145,10 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
       }
       savedGeneration = mine;
       if (!active()) return;
-      if (mine === generation) { ctx.setDirty(false); status('Черновик сохранён'); }
+      if (mine === generation) {
+        ctx.setDirty(false);
+        status(`Черновик сохранён. Чтобы применить изменения, нажмите «${kind === 'items' ? 'Сохранить вещь' : 'Сохранить образ'}».`);
+      }
     })();
     try { await running; } finally { running = null; }
     if (active() && savedGeneration !== generation) return flush();
