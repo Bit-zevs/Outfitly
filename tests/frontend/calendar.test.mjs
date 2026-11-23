@@ -33,7 +33,7 @@ test('picker excludes assigned outfits, searches and blocks duplicate saves', as
   let saves = 0; let finish; let refreshed = 0;
   const entries = [{ date: '2028-02-29', outfit: { id: 'one', name: 'Assigned', items: [] } }];
   const ctx = { route: parseRoute('#/calendar?month=2028-02&date=2028-02-29'), isCurrent: () => true,
-    get: async path => path.startsWith('/calendar') ? entries : [entries[0].outfit, { id: 'two', name: 'Вечер <test>', items: [] }],
+    get: async path => path.startsWith('/calendar') ? entries : { items: [entries[0].outfit, { id: 'two', name: 'Вечер <test>', items: [] }], total: 2, pageSize: 20, page: 1 },
     api: { request: async (path, options) => { saves++; assert.equal(options.method, 'PUT'); assert.equal(path, '/calendar/2028-02-29/outfits/two'); await new Promise(resolve => { finish = resolve; }); } }, refresh: () => { refreshed++; } };
   const page = await calendarPage(ctx); mount(t, page.html); page.bind(); document.querySelector('#calendar-add').click();
   await new Promise(resolve => setTimeout(resolve, 0));
@@ -41,6 +41,11 @@ test('picker excludes assigned outfits, searches and blocks duplicate saves', as
   const search = document.querySelector('#calendar-search'); search.value = 'нет'; search.dispatchEvent(new document.defaultView.Event('input'));
   assert.equal(document.querySelectorAll('[data-calendar-pick]').length, 0);
   search.value = 'ВЕЧЕР'; search.dispatchEvent(new document.defaultView.Event('input'));
+  search.focus();
+  search.form.requestSubmit();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('#calendar-search'), search);
+  assert.equal(document.activeElement, search);
   const button = document.querySelector('[data-calendar-pick]'); button.click(); button.click(); assert.equal(saves, 1);
   finish(); await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(refreshed, 1);
 });

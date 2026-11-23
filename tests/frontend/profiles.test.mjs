@@ -57,7 +57,8 @@ test('people search preserves the tab, resets pagination and renders public prof
   const form = document.querySelector('form'); form.elements.search.value = '@new';
   form.onsubmit({ preventDefault });
   const next = parseRoute(navigations[0]);
-  assert.equal(next.query.get('tab'), 'people');
+  assert.equal(next.path, '/people');
+  assert.equal(next.query.get('view'), 'search');
   assert.equal(next.query.get('search'), '@new');
   assert.equal(next.query.has('page'), false);
 });
@@ -114,4 +115,12 @@ test('personal profile shows a collection without settings controls', async () =
  assert.match(page.html,/Мой стиль/);assert.ok(!page.html.includes('href="#/settings"'));
  assert.doesNotMatch(page.html,/id="profile-form"|id="password-form"|id="avatar-form"/);
  assert.equal(privateRoute('/settings'),true);
+});
+
+test('people hub defaults to own following and keeps followers separate from discovery', async () => {
+ const requests=[];const get=async path=>{requests.push(path);return{items:[{username:'anna',displayName:'Анна'}],total:25,page:1,pageSize:20};};
+ const following=await peoplePage({auth:{user:{username:'owner'}},route:parseRoute('#/people'),get});
+ assert.equal(requests[0],'/users/owner/following?page=1');assert.match(following.html,/Подписки/);assert.match(following.html,/view=followers/);assert.match(following.html,/id="people-search"/);assert.doesNotMatch(following.html,/Тип коллекции|>Найти людей<\/a>/);
+ const followers=await peoplePage({auth:{user:{username:'owner'}},route:parseRoute('#/people?view=followers&page=2'),get});
+ assert.equal(requests[1],'/users/owner/followers?page=2');assert.match(followers.html,/view=followers/);
 });

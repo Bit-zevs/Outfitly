@@ -34,7 +34,7 @@ public sealed class WardrobeApiTests
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsync($"{route}/items/{itemId}", null)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(link.Url)).StatusCode);
         Assert.False((await Json(await client.GetAsync(route))).GetProperty("isPublic").GetBoolean());
-        Assert.Single((await Json(await client.GetAsync("/api/outfits"))).EnumerateArray());
+        Assert.Single((await Json(await client.GetAsync("/api/outfits"))).GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/items/{itemId}")).StatusCode);
     }
 

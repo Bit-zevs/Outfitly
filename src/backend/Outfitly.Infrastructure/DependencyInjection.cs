@@ -25,6 +25,8 @@ public static class DependencyInjection
         services.AddScoped<ISupportAdminAccess, ConfiguredSupportAdmins>();
         services.AddScoped<SupportService>();
         services.AddScoped<IPublicProfileQuery, EfPublicProfileQuery>();
+        services.AddScoped<IOutfitCatalogQuery, EfPublicProfileQuery>();
+        services.AddScoped<OutfitCatalog>();
         services.AddScoped<PublicProfiles>();
         services.AddScoped<IWorkspaceStore, EfWorkspaceStore>();
         services.AddScoped<WorkspaceService>();

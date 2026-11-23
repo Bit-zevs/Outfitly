@@ -4,7 +4,7 @@ import { createApi, ApiError } from '../../src/frontend/src/api.js';
 import { createAuth } from '../../src/frontend/src/auth.js';
 import { catalogQuery, changedFilter, parseRoute, privateRoute, safeReturn, shareAddress } from '../../src/frontend/src/router.js';
 import { saveItem, saveOutfit, uploadedPhoto } from '../../src/frontend/src/save.js';
-import { discover, detail, outfitItemDetail } from '../../src/frontend/src/pages.js';
+import { outfitsPage, discover, detail, outfitItemDetail } from '../../src/frontend/src/pages.js';
 import { validatePhoto } from '../../src/frontend/src/editors.js';
 import { itemCard, photo, choiceField, itemSizes, itemColors } from '../../src/frontend/src/components.js';
 
@@ -213,4 +213,9 @@ test('public outfit catalog requests a bounded page and preserves search in pagi
 test('a direct public outfit read never loads the catalog', async () => {
  const requests=[];const ctx={auth:{user:null},get:async path=>{requests.push(path);return{id:'look',name:'Look',isPublic:true,items:[]};}};
  const page=await detail(ctx,'outfits','look','public');assert.equal(page.title,'Look');assert.deepEqual(requests,['/wardrobe/outfits/look']);
+});
+
+test('my outfits request a searched page and keep pagination', async () => {
+ let request;const page=await outfitsPage({route:parseRoute('#/outfits?search=coat'),get:async path=>{request=path;return{items:[],total:25,page:1,pageSize:20};}});
+ assert.equal(request,'/outfits?search=coat&sort=nameAsc&page=1&pageSize=20');assert.match(page.html,/page=2/);assert.match(page.html,/catalog-search/);
 });

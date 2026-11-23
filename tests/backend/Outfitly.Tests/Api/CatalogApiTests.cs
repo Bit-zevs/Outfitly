@@ -7,6 +7,22 @@ namespace Outfitly.Tests.Api;
 public sealed class CatalogApiTests
 {
     [Fact]
+    public async Task Personal_outfit_pages_include_private_drafts_but_never_other_owners()
+    {
+        using var factory = new ApiFactory(); var owner = Guid.NewGuid(); var other = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner); await factory.SeedOwnerAsync(other);
+        using var client = await factory.OwnerClientAsync(owner); using var stranger = await factory.OwnerClientAsync(other);
+        foreach (var name in new[] { "Look C", "Look A", "Look B" })
+            (await client.PostAsJsonAsync("/api/outfits", new { name })).EnsureSuccessStatusCode();
+        (await stranger.PostAsJsonAsync("/api/outfits", new { name = "Look foreign" })).EnsureSuccessStatusCode();
+        var page = await client.GetFromJsonAsync<JsonElement>("/api/outfits?search=LOOK&sort=nameDesc&page=2&pageSize=2");
+        Assert.Equal(3, page.GetProperty("total").GetInt32());
+        Assert.Equal("Look A", Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("name").GetString());
+        var empty = await stranger.GetFromJsonAsync<JsonElement>("/api/outfits?search=absent");
+        Assert.Equal(0, empty.GetProperty("total").GetInt32());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/outfits?pageSize=101")).StatusCode);
+    }
+    [Fact]
     public async Task Public_outfits_search_sort_page_and_reject_private_direct_reads()
     {
         using var factory = new ApiFactory();

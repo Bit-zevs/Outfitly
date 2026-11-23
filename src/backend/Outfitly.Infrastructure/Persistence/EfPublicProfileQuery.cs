@@ -4,7 +4,7 @@ using Outfitly.Domain;
 
 namespace Outfitly.Infrastructure.Persistence;
 
-public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicProfileQuery
+public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicProfileQuery, IOutfitCatalogQuery
 {
     private IQueryable<User> Users => context.Users.AsNoTracking().Where(user =>
         context.Accounts.Any(account => account.UserId == user.Id && account.EmailConfirmed));
@@ -60,10 +60,14 @@ public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicPro
         return outfit is null ? null : (await ViewsAsync([outfit], ct)).Single();
     }
 
-    public async Task<PublicPage<OutfitView>> AllOutfitsAsync(ItemCatalogQuery filter, CancellationToken ct)
+    public Task<PublicPage<OutfitView>> AllOutfitsAsync(ItemCatalogQuery filter, CancellationToken ct) => CatalogAsync(null, filter, ct);
+
+    public Task<PublicPage<OutfitView>> MineAsync(Guid owner, ItemCatalogQuery filter, CancellationToken ct) => CatalogAsync(owner, filter, ct);
+
+    private async Task<PublicPage<OutfitView>> CatalogAsync(Guid? owner, ItemCatalogQuery filter, CancellationToken ct)
     {
         filter = filter.Normalize();
-        var outfits = Outfits(null);
+        var outfits = owner is { } ownerId ? context.Outfits.AsNoTracking().Where(outfit => outfit.OwnerId == ownerId) : Outfits(null);
         if (filter.Search is { } search)
         {
             if (context.Database.IsNpgsql())
