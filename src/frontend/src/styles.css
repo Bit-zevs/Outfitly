@@ -2473,3 +2473,10 @@ input,textarea,select,button,a { scroll-margin-block: 100px; }
 @media(max-width:600px) { .search-row .search-box,.sort-label { flex-basis: 100%; width: 100%; } .sort-label { margin-left: 0; } .social-panel { padding: 18px; } .social-toolbar { align-items: stretch; } .social-toolbar .btn { flex: 1 1 160px; } .copy-link-button { margin-left: 0; } }
 #favorite-resource::before { content: '☆'; font-size: 23px; line-height: 1; }
 #favorite-resource[aria-pressed="true"]::before { content: '★'; }
+
+.detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 18px; }
+.detail-meta .eyebrow { margin: 0; }
+.detail-meta .badge { flex: none; }
+.detail-description > .author-line { margin: 18px 0 26px; gap: 12px; align-items: center; }
+.detail-description > .author-line .user-avatar { flex: 0 0 40px; width: 40px; height: 40px; }
+.detail-description > .author-line a { min-width: 0; overflow-wrap: anywhere; font-size: 14px; color: var(--accent); }
