@@ -4,7 +4,7 @@ import { createApi, ApiError } from '../../src/frontend/src/api.js';
 import { createAuth } from '../../src/frontend/src/auth.js';
 import { catalogQuery, changedFilter, parseRoute, privateRoute, safeReturn, shareAddress } from '../../src/frontend/src/router.js';
 import { saveItem, saveOutfit, uploadedPhoto } from '../../src/frontend/src/save.js';
-import { detail } from '../../src/frontend/src/pages.js';
+import { detail, outfitItemDetail } from '../../src/frontend/src/pages.js';
 import { validatePhoto } from '../../src/frontend/src/editors.js';
 import { itemCard, photo, choiceField, itemSizes, itemColors } from '../../src/frontend/src/components.js';
 
@@ -187,4 +187,19 @@ test('creation publishes after photo saving and retries without creating another
  await assert.rejects(saveItem(api,draft));await saveItem(api,draft);
  assert.equal(calls.filter(([path])=>path==='/items').length,1);
  assert.deepEqual(calls.at(-1)[1].body,{isPublic:true});
+});
+
+test('shared outfit pieces remain scoped to the accessible parent and reject unrelated items', async () => {
+ const calls=[];const parent={name:'Shared look',items:[{id:'coat',name:'Private coat',category:'Outerwear'}]};
+ const ctx={route:{query:new URLSearchParams()},auth:{user:null},get:async path=>{calls.push(path);return parent;}};
+ const page=await outfitItemDetail(ctx,'shared','token','coat');
+ assert.match(page.html,/Private coat/);assert.match(page.html,/href="#\/shared\/outfits\/token"/);
+ assert.doesNotMatch(page.html,/id="engagement"|id="publication"/);
+ await assert.rejects(outfitItemDetail(ctx,'shared','token','unrelated'),error=>error.status===404);
+ assert.ok(calls.every(path=>path==='/shared/outfits/token'));
+});
+test('public outfit detail combines interactions and links to its pieces', async () => {
+ const page=await detail({auth:{user:null},get:async()=>({id:'look',name:'Look',isPublic:true,ownerUsername:'anna',items:[{id:'coat',name:'Coat'}]})},'outfits','look','public','anna');
+ assert.match(page.html,/public\/outfits\/look\/items\/coat/);
+ assert.match(page.html,/social-panel/);assert.doesNotMatch(page.html,/linebox actions" id="workspace-actions"/);
 });

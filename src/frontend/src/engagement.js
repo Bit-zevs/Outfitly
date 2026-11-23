@@ -24,7 +24,7 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
     const value = await request('/engagement');
     if (!active() || requestId !== statsRequest) return;
     stats = value;
-    root.querySelector('.engagement-stats').innerHTML = `<p>Просмотры: ${value.views} · Лайки: ${value.likes} · Комментарии: ${value.comments}</p>${value.canInteract ? `<button class="btn outline small" aria-pressed="${value.isLiked}" id="post-like">${value.isLiked ? 'Убрать лайк' : 'Нравится'}</button>` : '<p><a href="#/login">Войдите с подтверждённой почтой</a>, чтобы участвовать в обсуждении.</p>'}`;
+    root.querySelector('.engagement-stats').innerHTML = `<p>Просмотры: ${value.views} · Лайки: ${value.likes} · Комментарии: ${value.comments}</p>${value.canInteract ? `<button class="btn outline small reaction-button" aria-pressed="${value.isLiked}" id="post-like"><span aria-hidden="true">${value.isLiked ? '♥' : '♡'}</span> ${value.isLiked ? 'Убрать лайк' : 'Нравится'}<span class="reaction-count">${value.likes}</span></button>` : '<p><a href="#/login">Войдите с подтверждённой почтой</a>, чтобы участвовать в обсуждении.</p>'}`;
     const like = root.querySelector('#post-like');
     if (like) {
       like.disabled = likePending;
