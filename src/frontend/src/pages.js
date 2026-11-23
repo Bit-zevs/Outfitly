@@ -142,28 +142,84 @@ export async function detail(ctx, kind, id, access = 'owner', username = null, e
 }
 
 function shareDialog(ctx, kind, id) {
-  const dialog = modal('Поделиться по ссылке', '<p class="lead">Ссылки доступны для просмотра без входа и не зависят от публикации.</p><div id="share-list" aria-live="polite">Загружаем ссылки…</div><p class="error" role="alert" tabindex="-1" hidden></p><button class="btn" id="create-link">Создать ссылку</button>');
+  const dialog = modal('Ссылки для просмотра', '<div id="share-list"></div><p id="share-status" role="status">Загружаем ссылки…</p><p class="error" role="alert" tabindex="-1" hidden></p><button type="button" class="btn outline" id="retry-links" hidden>Повторить загрузку</button><button type="button" class="btn" id="create-link" disabled>Создать ссылку</button>');
   const list = dialog.querySelector('#share-list');
+  const status = dialog.querySelector('#share-status');
   const errorBox = dialog.querySelector('.error');
-  async function load() {
-    const links = await ctx.api.request(`/${kind}/${id}/share-links`);
-    if (!dialog.open || !ctx.isCurrent()) return;
-    list.innerHTML = links.length ? links.map(l => `<div class="share-row"><label><span class="sr-only">Ссылка для просмотра</span><input readonly value="${escape(shareAddress(location.origin, kind, l.token))}"></label><div class="actions"><button class="btn outline small" data-copy="${escape(l.token)}">Копировать</button><button class="btn outline danger small" data-revoke="${escape(l.id)}">Отозвать</button></div></div>`).join('') : '<p class="muted">Активных ссылок пока нет.</p>';
-    list.querySelectorAll('[data-copy]').forEach(button => { button.onclick = async () => {
-      try { await navigator.clipboard.writeText(shareAddress(location.origin, kind, button.dataset.copy)); ctx.toast('Ссылка скопирована'); }
-      catch { button.closest('.share-row').querySelector('input').select(); ctx.toast('Скопируйте выделенную ссылку вручную'); }
-    }; });
-    list.querySelectorAll('[data-revoke]').forEach(button => { button.onclick = () => mutate(button, () => ctx.api.request(`/share-links/${button.dataset.revoke}`, { method: 'DELETE' })); });
+  const create = dialog.querySelector('#create-link');
+  const retry = dialog.querySelector('#retry-links');
+  const active = () => dialog.open && list.isConnected && ctx.isCurrent();
+  let pending = false;
+
+  function render(links) {
+    list.innerHTML = links.length ? links.map(l => `<div class="share-row"><label><span class="sr-only">Ссылка для просмотра</span><input readonly value="${escape(shareAddress(location.origin, kind, l.token))}"></label><div class="actions"><button type="button" class="btn outline small" data-copy>Копировать</button><button type="button" class="btn outline danger small" data-revoke>Отозвать</button></div></div>`).join('') : '<p class="muted">Активных ссылок пока нет.</p>';
+    Array.from(list.children).forEach((row, index) => {
+      const link = links[index];
+      if (!link) return;
+      const input = row.querySelector('input');
+      row.querySelector('[data-copy]').onclick = async () => {
+        try { await navigator.clipboard.writeText(input.value); if (active()) status.textContent = 'Ссылка скопирована.'; }
+        catch { if (active()) { input.focus(); input.select(); status.textContent = 'Скопируйте выделенную ссылку вручную.'; } }
+      };
+      const revoke = row.querySelector('[data-revoke]');
+      revoke.onclick = () => {
+        if (pending) return;
+        list.querySelector('[data-cancel-revoke]')?.click();
+        const confirmation = document.createElement('div');
+        confirmation.className = 'share-confirmation';
+        confirmation.innerHTML = '<p>После отзыва по этой ссылке нельзя будет открыть публикацию.</p><div class="actions"><button type="button" class="btn outline small" data-cancel-revoke>Отмена</button><button type="button" class="btn danger small" data-confirm-revoke>Отозвать ссылку</button></div>';
+        row.append(confirmation);
+        revoke.hidden = true;
+        const cancel = confirmation.querySelector('[data-cancel-revoke]');
+        const confirm = confirmation.querySelector('[data-confirm-revoke]');
+        cancel.onclick = () => { confirmation.remove(); revoke.hidden = false; revoke.focus(); };
+        confirm.onclick = () => update('Ссылка отозвана.', () => ctx.api.request(`/share-links/${link.id}`, { method: 'DELETE' }), index, confirm);
+        cancel.focus();
+      };
+    });
   }
-  async function mutate(button, action) {
-    dialog.querySelectorAll('button:not([data-close])').forEach(b => { b.disabled = true; });
-    errorBox.hidden = true;
-    try { await action(); await load(); }
-    catch (error) { if (dialog.open && ctx.isCurrent()) showError(errorBox, error); }
-    finally { if (dialog.open && ctx.isCurrent()) dialog.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
+
+  async function update(message, mutation, index, trigger) {
+    if (pending || !active()) return;
+    pending = true;
+    const buttons = dialog.querySelectorAll('button:not([data-close])');
+    buttons.forEach(button => { button.disabled = true; });
+    errorBox.hidden = retry.hidden = true;
+    let loaded = false;
+    let changed = false;
+    try {
+      if (mutation) { await mutation(); changed = true; }
+      if (!active()) return;
+      status.textContent = 'Загружаем ссылки…';
+      const links = await ctx.api.request(`/${kind}/${id}/share-links`);
+      if (!active()) return;
+      render(links);
+      loaded = true;
+      status.textContent = message || `Активных ссылок: ${links.length}`;
+    } catch (error) {
+      if (!active()) return;
+      if (!mutation || changed) {
+        list.replaceChildren();
+        retry.hidden = false;
+        status.textContent = changed ? message : '';
+      } else status.textContent = '';
+      showError(errorBox, error);
+    } finally {
+      pending = false;
+      if (active()) {
+        buttons.forEach(button => { button.disabled = false; });
+        create.disabled = !retry.hidden;
+        if (loaded && trigger) {
+          const remaining = list.querySelectorAll('[data-revoke]');
+          (remaining.length && index !== undefined ? remaining[Math.min(index, remaining.length - 1)] : create).focus();
+        }
+      }
+    }
   }
-  dialog.querySelector('#create-link').onclick = event => mutate(event.currentTarget, () => ctx.api.request(`/${kind}/${id}/share-links`, { method: 'POST' }));
-  load().catch(error => { list.textContent = 'Не удалось загрузить ссылки.'; showError(errorBox, error); });
+
+  create.onclick = () => update('Ссылка создана.', () => ctx.api.request(`/${kind}/${id}/share-links`, { method: 'POST' }), undefined, create);
+  retry.onclick = () => update('', undefined, undefined, retry);
+  update('');
 }
 
 export async function account(ctx) {
