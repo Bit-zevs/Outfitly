@@ -9,7 +9,7 @@ import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
 import { avatar, escape, link, photoPlaceholder } from './components.js';
 import { itemEditor, outfitEditor } from './editors.js';
-import { account, authPage, dashboard, detail, discover, home, notFound, outfitsPage, wardrobe } from './pages.js';
+import { outfitItemDetail, account, authPage, dashboard, detail, discover, home, notFound, outfitsPage, wardrobe } from './pages.js';
 import { parseRoute, privateRoute } from './router.js';
 import { checkEmailPage, confirmEmailPage } from './email-confirmation.js';
 import { passwordResetPage } from './password-reset.js';
@@ -81,6 +81,7 @@ async function resolve(ctx) {
   if (parts.length === 3 && ['items', 'outfits'].includes(parts[0]) && parts[2] === 'edit') return parts[0] === 'items' ? itemEditor(ctx, parts[1]) : outfitEditor(ctx, parts[1]);
   if (parts.length === 2 && ['items', 'outfits'].includes(parts[0])) return detail(ctx, parts[0], parts[1]);
   if (parts.length === 3 && ['public', 'shared'].includes(parts[0]) && ['items', 'outfits'].includes(parts[1])) return detail(ctx, parts[1], decodeURIComponent(parts[2]), parts[0]);
+  if (parts.length === 5 && ['public', 'shared'].includes(parts[0]) && parts[1] === 'outfits' && parts[3] === 'items') return outfitItemDetail(ctx, parts[0], decodeURIComponent(parts[2]), decodeURIComponent(parts[4]));
   return notFound();
 }
 
