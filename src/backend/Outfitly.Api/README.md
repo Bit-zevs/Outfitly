@@ -168,7 +168,7 @@ GET `/api/items` и `/api/wardrobe` возвращают `{ "items": [...], "tot
 | `search` | Подстрока названия без учёта регистра; `%`, `_` и `\` — буквальные символы |
 | `category` | Одно имя категории по тем же правилам, что в JSON |
 | `color` | Точное совпадение без учёта регистра |
-| `sort` | `nameAsc` по умолчанию или `nameDesc`, затем ID по возрастанию |
+| `sort` | `newest` по дате создания, `likes` и `views` по убыванию счётчика, `nameAsc` и `nameDesc` по названию. Публичные каталоги по умолчанию используют `newest`, личные — `nameAsc`. При равенстве порядок определяется ID по возрастанию. |
 | `page` | От 1, по умолчанию 1 |
 | `pageSize` | От 1 до 100, по умолчанию 20 |
 
@@ -390,6 +390,11 @@ OwnerId/actorId из клиента не принимаются. Уникаль�
 | GET `/api/{items|outfits}/{id}/favorite` | `{isFavorite}` для доступной цели |
 | PUT / DELETE `/api/{items|outfits}/{id}/favorite` | Добавить / убрать, повтор безопасен; 204 |
 | POST `/api/outfits/{id}/copies` | `{operationId}` (непустой UUID) → `{id}` копии |
+| POST `/api/items/{id}/copies` | `{operationId}` (непустой UUID) → `{id}` отдельной приватной копии вещи |
+
+Отдельную вещь можно скопировать при доступе к ней напрямую, по её `shareToken`
+или через `publicOutfitId`, если опубликованный образ содержит эту вещь.
+Запросы реакций и комментариев к вещи также принимают `publicOutfitId`.
 | GET `/api/drafts?page=1` | Активные черновики, страницы по 20 |
 | GET `/api/drafts/active?kind=items&targetId=...` | `{draft}` или `{draft:null}`; targetId пропущен для создания |
 | GET `/api/drafts/{id}` | Личный черновик и результат его завершения |
@@ -414,7 +419,7 @@ route может содержать действующую сохранённу�
 PUT черновика принимает kind, targetId (nullable), version (null при создании),
 baseVersion и content. Content: name, description, category (nullable), color, size,
 brand, photoUrl, photoMode (file/url), removePhoto, itemIds, isPublic (по умолчанию false).
-Для новой вещи isPublic применяется только при явном save; автосохранение не публикует вещь.
+Для новой вещи или образа `isPublic` применяется при явном сохранении. Для публикации нового образа требуется хотя бы одна вещь.
 Для существующей вещи публичность меняется отдельной командой publication. Поля могут быть неполными;
 полная доменная валидация выполняется при save. Сериализованные данные до 65536
 символов, состав до 1000 ID. Ответ: id, kind, targetId, version, baseVersion,

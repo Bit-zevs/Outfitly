@@ -14,7 +14,7 @@ public sealed record CommentView(Guid Id, PublicUser Author, string? Text, Guid?
 
 public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractionStore store, TimeProvider time)
 {
-    private Guid Access(Guid id, bool outfit, Guid? actor, string? token, bool changing)
+    private Guid Access(Guid id, bool outfit, Guid? actor, string? token, bool changing, Guid? publicOutfitId)
     {
         Guid owner; bool published;
         if (outfit)
@@ -29,28 +29,32 @@ public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractio
             owner = target.OwnerId; published = target.IsPublic;
         }
         if (!published && owner != actor && !wardrobe.GetLinks().Any(x => x.IsActive && x.Token == token && x.TargetId == id &&
-            x.TargetType == (outfit ? ShareTargetType.Outfit : ShareTargetType.WardrobeItem))) throw new KeyNotFoundException();
+            x.TargetType == (outfit ? ShareTargetType.Outfit : ShareTargetType.WardrobeItem)))
+        {
+            if (outfit) throw new KeyNotFoundException();
+            PublicOutfitItem.Require(wardrobe, publicOutfitId, id, changing);
+        }
         return owner;
     }
     private IQueryable<PostInteraction> Rows(Guid id, bool outfit) => store.Interactions.Where(x => outfit ? x.OutfitId == id : x.ItemId == id);
-    public EngagementView Read(Guid id, bool outfit, Guid? actor, string? token)
+    public EngagementView Read(Guid id, bool outfit, Guid? actor, string? token, Guid? publicOutfitId = null)
     {
-        Access(id, outfit, actor, token, false);
+        Access(id, outfit, actor, token, false, publicOutfitId);
         var rows = Rows(id, outfit);
         return new(rows.Count(x => x.Kind == "view"), rows.Count(x => x.Kind == "like"),
             rows.Count(x => x.Kind == "comment" && !x.IsDeleted), actor.HasValue && rows.Any(x => x.Kind == "like" && x.UserId == actor), actor.HasValue);
     }
-    public void React(Guid id, bool outfit, Guid actor, string? token, string kind, bool remove = false)
+    public void React(Guid id, bool outfit, Guid actor, string? token, string kind, bool remove = false, Guid? publicOutfitId = null)
     {
-        var owner = Access(id, outfit, actor, token, true);
+        var owner = Access(id, outfit, actor, token, true, publicOutfitId);
         if (kind == "view" && owner == actor) return;
         var existing = Rows(id, outfit).SingleOrDefault(x => x.Kind == kind && x.UserId == actor);
         if (remove) { if (existing is not null) store.Remove(existing); }
         else if (existing is null) store.Add(new(id, outfit, actor, kind, null, null, time.GetUtcNow()));
     }
-    public PublicPage<CommentView> Comments(Guid id, bool outfit, Guid? actor, string? token, Guid? parent, int page)
+    public PublicPage<CommentView> Comments(Guid id, bool outfit, Guid? actor, string? token, Guid? parent, int page, Guid? publicOutfitId = null)
     {
-        var owner = Access(id, outfit, actor, token, false);
+        var owner = Access(id, outfit, actor, token, false, publicOutfitId);
         PublicProfiles.ValidatePage(page, 20);
         var rows = Rows(id, outfit).Where(x => x.Kind == "comment" && x.ParentId == parent);
         var total = rows.Count();
@@ -64,17 +68,17 @@ public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractio
         return new(x.Id, new(user.Id, user.DisplayName, user.Username, user.AvatarStorageKey == null ? null : $"/api/users/{user.Id}/avatar"), x.Text, x.ParentId, x.CreatedAt, x.UpdatedAt,
             x.IsDeleted, !x.IsDeleted && actor == x.UserId, !x.IsDeleted && (actor == x.UserId || actor == owner));
     }
-    public Guid AddComment(Guid id, bool outfit, Guid actor, string? token, string text, Guid? parent)
+    public Guid AddComment(Guid id, bool outfit, Guid actor, string? token, string text, Guid? parent, Guid? publicOutfitId = null)
     {
-        Access(id, outfit, actor, token, true);
+        Access(id, outfit, actor, token, true, publicOutfitId);
         if (parent.HasValue && !Rows(id, outfit).Any(x => x.Id == parent && x.Kind == "comment" && x.ParentId == null && !x.IsDeleted))
             throw new ArgumentException("Invalid reply target.");
         var comment = new PostInteraction(id, outfit, actor, "comment", text, parent, time.GetUtcNow());
         store.Add(comment); return comment.Id;
     }
-    public void ChangeComment(Guid id, bool outfit, Guid actor, string? token, Guid commentId, string? text, bool delete)
+    public void ChangeComment(Guid id, bool outfit, Guid actor, string? token, Guid commentId, string? text, bool delete, Guid? publicOutfitId = null)
     {
-        var owner = Access(id, outfit, actor, token, true);
+        var owner = Access(id, outfit, actor, token, true, publicOutfitId);
         var comment = Rows(id, outfit).SingleOrDefault(x => x.Id == commentId && x.Kind == "comment") ?? throw new KeyNotFoundException();
         if (comment.UserId != actor && !(delete && owner == actor)) throw new UnauthorizedAccessException();
         if (delete) comment.Delete(); else comment.Edit(text!, time.GetUtcNow());

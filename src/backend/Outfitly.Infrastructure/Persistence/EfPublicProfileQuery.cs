@@ -78,7 +78,14 @@ public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicPro
             else { var term = search.ToLowerInvariant(); outfits = outfits.Where(outfit => outfit.Name.ToLower().Contains(term)); }
         }
         var total = await outfits.CountAsync(ct);
-        var ordered = filter.Sort == "nameDesc" ? outfits.OrderByDescending(outfit => outfit.Name) : outfits.OrderBy(outfit => outfit.Name);
+        var ordered = filter.Sort switch
+        {
+            "nameDesc" => outfits.OrderByDescending(outfit => outfit.Name),
+            "newest" => outfits.OrderByDescending(outfit => outfit.CreatedAtUtc.HasValue).ThenByDescending(outfit => outfit.CreatedAtUtc),
+            "likes" => outfits.OrderByDescending(outfit => context.Set<PostInteraction>().Count(reaction => reaction.OutfitId == outfit.Id && reaction.Kind == "like")),
+            "views" => outfits.OrderByDescending(outfit => context.Set<PostInteraction>().Count(reaction => reaction.OutfitId == outfit.Id && reaction.Kind == "view")),
+            _ => outfits.OrderBy(outfit => outfit.Name)
+        };
         var selected = await ordered.ThenBy(outfit => outfit.Id).Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToArrayAsync(ct);
         return new(await ViewsAsync(selected, ct), total, filter.Page, filter.PageSize);
     }

@@ -17,6 +17,8 @@ public static class WorkspaceEndpoints
             group.MapPut($"/{kind}/{{id:guid}}/favorite", (Guid id, string? shareToken, HttpContext h, WorkspaceService s) => { s.Favorite(CurrentActor.Id(h.User), kind, id, shareToken, false); return Results.NoContent(); }).AddEndpointFilter<CommitChangesFilter>();
             group.MapDelete($"/{kind}/{{id:guid}}/favorite", (Guid id, HttpContext h, WorkspaceService s) => { s.Favorite(CurrentActor.Id(h.User), kind, id, null, true); return Results.NoContent(); }).AddEndpointFilter<CommitChangesFilter>();
         }
+        group.MapPost("/items/{id:guid}/copies", async (Guid id, string? shareToken, Guid? publicOutfitId, CopyRequest request, HttpContext h, WorkspaceService s, CancellationToken ct) =>
+            Results.Ok(new { Id = await s.CopyItemAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, publicOutfitId, ct) })).AddEndpointFilter<CommitChangesFilter>();
         group.MapPost("/outfits/{id:guid}/copies", async (Guid id, string? shareToken, CopyRequest request, HttpContext h, WorkspaceService s, CancellationToken ct) =>
             Results.Ok(new { Id = await s.CopyAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, ct) })).AddEndpointFilter<CommitChangesFilter>();
         group.MapGet("/drafts", (int? page, HttpContext h, WorkspaceService s) => s.Drafts(CurrentActor.Id(h.User), page ?? 1));

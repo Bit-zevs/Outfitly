@@ -11,10 +11,10 @@ public static class WardrobeEndpoints
     public static void MapWardrobeEndpoints(this WebApplication app)
     {
         app.MapGet("/api/wardrobe", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
-            await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query), context.RequestAborted), false));
+            await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query, defaultSort: "newest"), context.RequestAborted), false));
         app.MapGet("/api/wardrobe/outfits", async (HttpContext http, PublicProfiles profiles, CancellationToken ct) =>
         {
-            var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query), ct);
+            var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query, defaultSort: "newest"), ct);
             return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/wardrobe/outfits/{outfit.Id}/items/{id}/photo")), page.Total, page.Page, page.PageSize };
         });
         app.MapGet("/api/wardrobe/outfits/{id:guid}", async (Guid id, PublicProfiles profiles, CancellationToken ct) =>

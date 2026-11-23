@@ -31,6 +31,25 @@ public sealed class WorkspaceApiTests
         Assert.Equal(isPublic, item.IsPublic);
     }
     [Fact]
+    public async Task New_outfit_can_be_published_atomically_with_its_members()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var owner = await SocialProfileApiTests.Register(factory, "publishoutfit");
+        using var guest = factory.CreateClient();
+        var item = await CreateItem(owner, "Shirt");
+        var draftId = Guid.NewGuid();
+        var draft = await PutDraft(owner, draftId, new("outfits", null, null, null,
+            new(Name: "Look", ItemIds: [item], IsPublic: true)));
+        var saved = await owner.PostAsJsonAsync($"/api/drafts/{draftId}/save", new { version = draft.Version });
+        saved.EnsureSuccessStatusCode();
+        var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var outfit = (await guest.GetFromJsonAsync<OutfitView>($"/api/wardrobe/outfits/{id}", Json))!;
+        Assert.True(outfit.IsPublic);
+        Assert.Equal(item, Assert.Single(outfit.Items).Id);
+    }
+
+    [Fact]
     public async Task Favorites_recheck_access_keep_private_tombstones_and_never_share_another_accounts_list()
     {
         using var factory = new ApiFactory(testAuthentication: false); await factory.InitializeDatabaseAsync();
@@ -79,6 +98,39 @@ public sealed class WorkspaceApiTests
         var retry = await reader.PostAsJsonAsync($"/api/outfits/{outfit}/copies", new { operationId }); retry.EnsureSuccessStatusCode();
         Assert.Equal(copyId, (await retry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
     }
+    [Fact]
+    public async Task Public_outfit_members_can_be_copied_and_discussed_only_with_valid_context()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var owner = await SocialProfileApiTests.Register(factory, "owner");
+        using var reader = await SocialProfileApiTests.Register(factory, "reader");
+        var item = await CreateItem(owner, "Coat");
+        var unrelated = await CreateItem(owner, "Other");
+        var outfit = await CreateOutfit(owner, item);
+        var query = $"?publicOutfitId={outfit}";
+        var operation = new { operationId = Guid.NewGuid() };
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation)).StatusCode);
+        (await owner.PatchAsJsonAsync($"/api/outfits/{outfit}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{unrelated}/engagement{query}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{item}/engagement")).StatusCode);
+        (await reader.PutAsync($"/api/items/{item}/like{query}", null)).EnsureSuccessStatusCode();
+        (await reader.PostAsJsonAsync($"/api/items/{item}/comments{query}", new { text = "Nice coat" })).EnsureSuccessStatusCode();
+        var counts = (await reader.GetFromJsonAsync<EngagementView>($"/api/items/{item}/engagement{query}"))!;
+        Assert.True(counts.IsLiked);
+        Assert.Equal(1, counts.Comments);
+        var response = await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation);
+        response.EnsureSuccessStatusCode();
+        var copiedId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.NotEqual(item, copiedId);
+        Assert.False((await reader.GetFromJsonAsync<ItemView>($"/api/items/{copiedId}", Json))!.IsPublic);
+        var retry = await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation);
+        retry.EnsureSuccessStatusCode();
+        Assert.Equal(copiedId, (await retry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        (await owner.PatchAsJsonAsync($"/api/outfits/{outfit}/publication", new { isPublic = false })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{item}/engagement{query}")).StatusCode);
+    }
+
     [Fact]
     public async Task Drafts_accept_incomplete_content_are_private_and_finalize_once_with_the_photo()
     {

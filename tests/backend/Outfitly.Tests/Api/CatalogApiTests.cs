@@ -29,11 +29,12 @@ public sealed class CatalogApiTests
         var owner = Guid.NewGuid(); await factory.SeedOwnerAsync(owner);
         using var client = await factory.OwnerClientAsync(owner); using var guest = factory.CreateClient();
         var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })).Content.ReadFromJsonAsync<JsonElement>();
-        Guid privateId = default, publicId = default;
+        Guid privateId = default, publicId = default, likedId = default;
         foreach (var name in new[] { "Walk C", "Walk A", "Walk B", "Walk private", "Other" })
         {
             var created = await (await client.PostAsJsonAsync("/api/outfits", new { name })).Content.ReadFromJsonAsync<JsonElement>();
             var id = created.GetProperty("id").GetGuid();
+            if (name == "Walk C") likedId = id;
             (await client.PostAsync($"/api/outfits/{id}/items/{item.GetProperty("id").GetGuid()}", null)).EnsureSuccessStatusCode();
             if (name == "Walk private") privateId = id;
             else { (await client.PatchAsJsonAsync($"/api/outfits/{id}/publication", new { isPublic = true })).EnsureSuccessStatusCode(); publicId = id; }
@@ -45,6 +46,16 @@ public sealed class CatalogApiTests
         Assert.Equal(new[] { "Walk C", "Walk B" }, first.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("name").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync($"/api/wardrobe/outfits/{privateId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync($"/api/wardrobe/outfits/{publicId}")).StatusCode);
+        var readerId = Guid.NewGuid();
+        await factory.SeedOwnerAsync(readerId);
+        using var reader = await factory.OwnerClientAsync(readerId);
+        (await reader.PutAsync($"/api/outfits/{likedId}/like", null)).EnsureSuccessStatusCode();
+        (await reader.PostAsync($"/api/outfits/{publicId}/views", null)).EnsureSuccessStatusCode();
+        foreach (var (sort, expected) in new[] { ("", publicId), ("&sort=likes", likedId), ("&sort=views", publicId) })
+        {
+            var sorted = await guest.GetFromJsonAsync<JsonElement>($"/api/wardrobe/outfits?pageSize=1{sort}");
+            Assert.Equal(expected, Assert.Single(sorted.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
+        }
         foreach (var invalid in new[] { "page=0", "pageSize=101", "sort=bad", "page=1&page=2" })
             Assert.Equal(HttpStatusCode.BadRequest, (await guest.GetAsync("/api/wardrobe/outfits?" + invalid)).StatusCode);
     }

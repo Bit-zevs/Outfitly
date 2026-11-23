@@ -102,17 +102,41 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
         var copy = commands.CreateOutfit(actor, original.Name + " (копия)", original.Description);
         foreach (var item in wardrobe.GetAll().Where(x => original.ItemIds.Contains(x.Id)).ToArray())
         {
-            var cloned = commands.CreateItem(actor, item.Name, item.Category, item.Color, item.Size, item.Brand, item.Description, item.PhotoUrl);
-            if (item.PhotoStorageKey != null)
-            {
-                var photo = await files.ReadAsync(item.PhotoStorageKey, ct) ?? throw Conflict();
-                await using var stream = photo.Content; using var buffer = new MemoryStream(); await stream.CopyToAsync(buffer, ct);
-                var key = await files.WriteAsync(buffer.ToArray(), photo.ContentType == "image/png" ? ".png" : ".jpg", ct); changes.Created(key); cloned.SetUploadedPhoto(key);
-            }
-            copy.AddItem(cloned);
+            copy.AddItem(await CloneItemAsync(actor, item, ct));
+
         }
         store.Add(new CopyReceipt(actor, operation, source, copy.Id)); return copy.Id;
     }
+    public async Task<Guid> CopyItemAsync(Guid actor, Guid source, Guid operation, string? token, Guid? publicOutfitId, CancellationToken ct)
+    {
+        Actor(actor);
+        if (operation == Guid.Empty) throw new ArgumentException("Operation id is required.");
+        var previous = store.Copies.SingleOrDefault(x => x.UserId == actor && x.OperationId == operation);
+        if (previous != null)
+        {
+            if (previous.SourceId != source) throw new ArgumentException("Operation belongs to another source.");
+            return previous.ResultId;
+        }
+        if (!Accessible(actor, "items", source, token))
+            PublicOutfitItem.Require(wardrobe, publicOutfitId, source, changing: true);
+        var item = wardrobe.GetAll().SingleOrDefault(x => x.Id == source) ?? throw new KeyNotFoundException();
+        var copy = await CloneItemAsync(actor, item, ct);
+        store.Add(new CopyReceipt(actor, operation, source, copy.Id));
+        return copy.Id;
+    }
+
+    private async Task<WardrobeItem> CloneItemAsync(Guid actor, WardrobeItem item, CancellationToken ct)
+    {
+        var cloned = commands.CreateItem(actor, item.Name, item.Category, item.Color, item.Size, item.Brand, item.Description, item.PhotoUrl);
+        if (item.PhotoStorageKey != null)
+        {
+            var photo = await files.ReadAsync(item.PhotoStorageKey, ct) ?? throw Conflict();
+            await using var stream = photo.Content; using var buffer = new MemoryStream(); await stream.CopyToAsync(buffer, ct);
+            var key = await files.WriteAsync(buffer.ToArray(), photo.ContentType == "image/png" ? ".png" : ".jpg", ct); changes.Created(key); cloned.SetUploadedPhoto(key);
+        }
+        return cloned;
+    }
+
     private static WardrobeConcurrencyException Conflict() => new(new InvalidOperationException("Resource changed; reload before saving."));
     private EditorDraft Owned(Guid actor, Guid id)
     { Actor(actor); return store.Drafts.SingleOrDefault(x => x.Id == id && x.UserId == actor) ?? throw new KeyNotFoundException(); }
@@ -198,6 +222,7 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
             var desired = (content.ItemIds ?? []).Distinct().ToArray();
             foreach (var itemId in desired.Except(outfit.ItemIds).ToArray()) commands.AddItemToOutfit(actor, outfit.Id, itemId);
             foreach (var itemId in outfit.ItemIds.Except(desired).ToArray()) commands.RemoveItemFromOutfit(actor, outfit.Id, itemId);
+            if (!d.TargetId.HasValue && content.IsPublic) commands.SetPublication(actor, ShareTargetType.Outfit, outfit.Id, true);
             changes.RemoveAfterCommit(d.PhotoStorageKey); result = outfit.Id;
         }
         d.Complete(result, Now); return result;

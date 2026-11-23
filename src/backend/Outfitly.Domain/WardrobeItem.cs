@@ -4,6 +4,7 @@ public sealed class WardrobeItem
 {
     public Guid Id { get; }
     public Guid OwnerId { get; }
+    public DateTime? CreatedAtUtc { get; private set; } = DateTime.UtcNow;
     public string Name { get; private set; }
     public ClothingCategory Category { get; private set; }
     public string? Color { get; private set; }

@@ -11,7 +11,7 @@ public sealed record ItemCatalogQuery(string? Search = null, ClothingCategory? C
     {
         if (Page < 1 || PageSize is < 1 or > 100 || (long)(Page - 1) * PageSize > int.MaxValue)
             throw new ArgumentException("Invalid page or pageSize (1–100).");
-        if (Sort is not ("nameAsc" or "nameDesc")) throw new ArgumentException("Invalid sort.");
+        if (Sort is not ("nameAsc" or "nameDesc" or "newest" or "likes" or "views")) throw new ArgumentException("Invalid sort.");
         if (Publication is not ("all" or "public" or "private")) throw new ArgumentException("Invalid publication.");
         if (Category is { } category && !Enum.IsDefined(category)) throw new ArgumentException("Invalid category.");
         if (ColorMissing && Color is not null || BrandMissing && Brand is not null || SizeMissing && Size is not null)

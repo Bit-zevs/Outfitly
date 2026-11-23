@@ -1,3 +1,4 @@
+using Outfitly.Domain;
 using Microsoft.EntityFrameworkCore;
 using Outfitly.Application;
 
@@ -41,7 +42,14 @@ public sealed class EfItemCatalogQuery(OutfitlyDbContext context) : IItemCatalog
             }
         }
         var total = await items.CountAsync(cancellationToken);
-        var ordered = query.Sort == "nameDesc" ? items.OrderByDescending(item => item.Name) : items.OrderBy(item => item.Name);
+        var ordered = query.Sort switch
+        {
+            "nameDesc" => items.OrderByDescending(item => item.Name),
+            "newest" => items.OrderByDescending(item => item.CreatedAtUtc.HasValue).ThenByDescending(item => item.CreatedAtUtc),
+            "likes" => items.OrderByDescending(item => context.Set<PostInteraction>().Count(reaction => reaction.ItemId == item.Id && reaction.Kind == "like")),
+            "views" => items.OrderByDescending(item => context.Set<PostInteraction>().Count(reaction => reaction.ItemId == item.Id && reaction.Kind == "view")),
+            _ => items.OrderBy(item => item.Name)
+        };
         var page = await ordered.ThenBy(item => item.Id).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
             .Select(item => new ItemView(item.Id, item.OwnerId, item.Name, item.Category, item.Color, item.Size,
                 item.Brand, item.Description, item.PhotoUrl, item.IsPublic, item.PhotoStorageKey != null,

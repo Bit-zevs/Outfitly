@@ -4,7 +4,8 @@ export const supportCategories = { feedback: 'Отзыв', suggestion: 'Пред
 export const supportStatuses = { new: 'Новое', inProgress: 'В работе', closed: 'Закрыто' };
 const stamp = value => new Date(value.endsWith('Z') ? value : `${value}Z`).toLocaleString('ru-RU');
 const choices = (name, values, current, all = false) => `<label class="field">${name === 'category' ? 'Категория' : 'Статус'}<select name="${name}">${all ? '<option value="">Все</option>' : ''}${Object.entries(values).map(([value, label]) => `<option value="${value}" ${value === current ? 'selected' : ''}>${label}</option>`).join('')}</select></label>`;
-const attachments = '<label class="field">Скриншоты (до 3, по 5 МиБ)<input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple></label>';
+const statusBadge = status => `<span class="badge support-status" data-status="${escape(status)}">Статус: ${escape(supportStatuses[status])}</span>`;
+const attachments = '<label class="field">Добавить фото (до 3, по 5 МиБ)<input type="file" name="images" accept="image/jpeg,image/png,image/webp" multiple></label><ul id="support-selected-images"></ul>';
 const messageForm = (create = false) => `<form id="support-form">${create ? `${choices('category', supportCategories)}<label class="field">Тема<input name="subject" required maxlength="150"></label>` : ''}<label class="field">${create ? 'Описание' : 'Сообщение'}<textarea name="text" maxlength="5000" ${create ? 'required' : ''} rows="6"></textarea></label>${attachments}<p id="support-form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn" type="submit">Отправить</button></form>`;
 const current = ctx => !ctx.signal?.aborted && (ctx.isCurrent?.() ?? true);
 export async function supportPage(ctx, admin = false, id = null) {
@@ -17,24 +18,24 @@ export async function supportPage(ctx, admin = false, id = null) {
     const page = await ctx.get(`${api}?${query}`);
     return { title: 'Поддержка', html: title('Обратная связь', admin ? 'Обращения пользователей' : 'Мои обращения', '', !admin ? link('/support/new', 'Написать в поддержку', 'btn') : '') +
       `${!admin && ctx.auth.user?.isSupportAdmin ? link('/admin/support', 'Обращения пользователей', 'btn outline') : ''}<form id="support-filters" class="support-filters">${choices('category', supportCategories, query.get('category'), true)}${choices('status', supportStatuses, query.get('status'), true)}<button class="btn">Применить</button>${link(base, 'Сбросить', 'btn outline')}</form>` +
-      (page.items.length ? page.items.map(x => `<article class="linebox"><h2>${link(`${base}/${x.id}`, x.subject)}</h2><p>${supportCategories[x.category]} · ${supportStatuses[x.status]} · ${escape(stamp(x.updatedAtUtc))}</p></article>`).join('') : empty('Обращений пока нет', 'Здесь появятся обращения и ответы поддержки.')) + pagination(ctx.route, page), bind() {
+      (page.items.length ? page.items.map(x => `<article class="linebox"><h2>${link(`${base}/${x.id}`, x.subject)}</h2><p>${supportCategories[x.category]} · ${escape(stamp(x.updatedAtUtc))}</p>${statusBadge(x.status)}</article>`).join('') : empty('Обращений пока нет', 'Здесь появятся обращения и ответы поддержки.')) + pagination(ctx.route, page), bind() {
         document.querySelector('#support-filters').onsubmit = event => { event.preventDefault(); const form = event.currentTarget; const q = new URLSearchParams(); for (const key of ['category', 'status']) if (form.elements[key].value) q.set(key, form.elements[key].value); ctx.navigate(`${base}?${q}`); };
       } };
   }
   let ticket = await ctx.get(`${api}/${id}`);
   const renderMessages = () => ticket.messages.map(m => `<article class="linebox"><p><strong>${m.isAdmin ? 'Поддержка' : 'Пользователь'}</strong> · ${escape(stamp(m.createdAtUtc))}</p><p class="support-text">${escape(m.text)}</p><div class="support-attachments">${m.attachments.map(a => `<a href="${escape(a.url)}" target="_blank" rel="noopener"><img src="${escape(a.url)}" alt="Скриншот к сообщению" width="520" height="440" loading="lazy"></a>`).join('')}</div></article>`).join('');
-  return { title: ticket.subject, html: title('Поддержка', ticket.subject) + `<p id="support-status">${supportCategories[ticket.category]} · ${supportStatuses[ticket.status]}</p>${admin ? `<form id="support-status-form">${choices('status', { inProgress: 'В работе', closed: 'Закрыто' }, ticket.status)}<button class="btn outline">Изменить статус</button></form>` : ''}<p class="error" id="support-error" role="alert" tabindex="-1" hidden></p><div id="support-messages">${renderMessages()}</div><div id="support-reply">${ticket.status === 'closed' ? '<p>Обращение закрыто. Новые сообщения недоступны.</p>' : messageForm()}</div>`, bind() {
+  return { title: ticket.subject, html: link(base, admin ? 'К списку обращений' : 'К моим обращениям', 'btn support-back') + title('Поддержка', ticket.subject) + `<p id="support-status" role="status">${statusBadge(ticket.status)}</p>${admin ? `<form id="support-status-form">${choices('status', { inProgress: 'В работе', closed: 'Закрыто' }, ticket.status)}<button class="btn outline">Изменить статус</button></form>` : ''}<p class="error" id="support-error" role="alert" tabindex="-1" hidden></p><div id="support-messages">${renderMessages()}</div><div id="support-reply">${ticket.status === 'closed' ? '<p>Обращение закрыто. Новые сообщения недоступны.</p>' : messageForm()}</div>`, bind() {
     const reloadConflict = async () => {
       ticket = await ctx.get(`${api}/${id}`); if (!current(ctx)) return;
       document.querySelector('#support-messages').innerHTML = renderMessages();
-      document.querySelector('#support-status').textContent = `${supportCategories[ticket.category]} · ${supportStatuses[ticket.status]}`;
+      document.querySelector('#support-status').innerHTML = statusBadge(ticket.status);
       let form = document.querySelector('#support-form');
       if (!form && ticket.status !== 'closed') {
         document.querySelector('#support-reply').innerHTML = messageForm();
         bindMessage(ctx, `${api}/${id}/messages`, () => ticket.revision, () => ticket.status === 'closed', reloadConflict);
         form = document.querySelector('#support-form');
       }
-      if (form) form.querySelector('button').disabled = ticket.status === 'closed';
+      if (form) form.querySelector('[type=submit]').disabled = ticket.status === 'closed';
       if (statusForm) statusForm.elements.status.value = ticket.status;
     };
     if (ticket.status !== 'closed') bindMessage(ctx, `${api}/${id}/messages`, () => ticket.revision, () => ticket.status === 'closed', reloadConflict);
@@ -49,11 +50,37 @@ export async function supportPage(ctx, admin = false, id = null) {
 }
 function bindMessage(ctx, path, revision, closed, conflict) {
   const form = document.querySelector('#support-form'); let saving = false;
+  const selected = [];
+  const picker = form.elements.images;
+  const list = form.querySelector('#support-selected-images');
+  const errorElement = form.querySelector('#support-form-error');
+  function renderFiles() {
+    list.innerHTML = selected.map((file, index) => `<li>${escape(file.name)} <button type="button" class="btn outline small" data-remove-image="${index}">Убрать</button></li>`).join('');
+    list.querySelectorAll('button').forEach(button => { button.onclick = () => {
+      selected.splice(Number(button.dataset.removeImage), 1);
+      errorElement.hidden = true;
+      renderFiles();
+      picker.focus();
+    }; });
+  }
+  picker.onchange = () => {
+    const additional = [...picker.files];
+    picker.value = '';
+    errorElement.hidden = true;
+    if (selected.length + additional.length > 3 || additional.some(file => file.size > 5 * 1024 * 1024)) {
+      errorElement.hidden = false;
+      errorElement.textContent = 'Выберите до трёх изображений, каждое не больше 5 МиБ.';
+      return;
+    }
+    selected.push(...additional);
+    renderFiles();
+    if (additional.length) ctx.setDirty?.(true);
+  };
   form.oninput = () => ctx.setDirty?.(true);
   form.onsubmit = async event => {
     event.preventDefault(); if (saving || (typeof closed === 'function' ? closed() : closed) || document.querySelector('#support-status-form')?.getAttribute('aria-busy') === 'true') return;
     const errorElement = document.querySelector('#support-form-error'); errorElement.hidden = true;
-    const files = [...form.elements.images.files];
+    const files = [...selected, ...picker.files];
     if (files.length > 3 || files.some(f => f.size > 5 * 1024 * 1024)) { showError(errorElement, new Error('attachments')); errorElement.textContent = 'Выберите до трёх изображений, каждое не больше 5 МиБ.'; return; }
     if (!form.elements.text.value.trim() && !files.length) { errorElement.hidden = false; errorElement.textContent = 'Введите сообщение или выберите изображение.'; return; }
     const body = new FormData();
@@ -68,6 +95,6 @@ function bindMessage(ctx, path, revision, closed, conflict) {
       if (!current(ctx)) return;
       if (error.status === 409 && conflict) { try { await conflict(); } catch { /* Preserve text even when refresh fails. */ } }
       if (current(ctx)) showError(errorElement, error);
-    } finally { saving = false; if (current(ctx)) { ctx.setSaving?.(false); busy(form, false); form.querySelector('button').disabled = typeof closed === 'function' ? closed() : closed; } }
+    } finally { saving = false; if (current(ctx)) { ctx.setSaving?.(false); busy(form, false); form.querySelector('[type=submit]').disabled = typeof closed === 'function' ? closed() : closed; } }
   };
 }

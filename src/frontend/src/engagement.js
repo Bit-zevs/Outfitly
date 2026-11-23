@@ -1,11 +1,11 @@
 import { avatar, escape } from './components.js';
 import { errorMessage } from './api.js';
 
-export function bindEngagement(ctx, kind, resource, shareToken) {
+export function bindEngagement(ctx, kind, resource, shareToken, publicOutfitId) {
   const root = document.querySelector('#engagement');
   if (!root) return;
   const base = `/${kind}/${resource.id}`;
-  const token = shareToken ? `shareToken=${encodeURIComponent(shareToken)}` : '';
+  const token = shareToken ? `shareToken=${encodeURIComponent(shareToken)}` : publicOutfitId ? `publicOutfitId=${encodeURIComponent(publicOutfitId)}` : '';
   const path = (suffix, query = '') => `${base}${suffix}${token || query ? '?' : ''}${[token, query].filter(Boolean).join('&')}`;
   const request = (suffix, options, query) => ctx.api.request(path(suffix, query), options);
   const active = () => ctx.isCurrent() && root.isConnected;
