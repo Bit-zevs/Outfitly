@@ -7,6 +7,9 @@ public sealed record ItemCatalogQuery(string? Search = null, ClothingCategory? C
     string? Brand = null, string? Size = null, string Publication = "all",
     bool ColorMissing = false, bool BrandMissing = false, bool SizeMissing = false)
 {
+    public bool HasItemAttributes => Category.HasValue || Color is not null || Brand is not null || Size is not null ||
+        ColorMissing || BrandMissing || SizeMissing;
+
     public ItemCatalogQuery Normalize()
     {
         if (Page < 1 || PageSize is < 1 or > 100 || (long)(Page - 1) * PageSize > int.MaxValue)
@@ -28,7 +31,8 @@ public sealed record ItemFilterOptions(IReadOnlyCollection<string?> Colors, IRea
 public interface IItemCatalogQuery
 {
     Task<ItemPage> GetAsync(Guid? ownerId, ItemCatalogQuery query, CancellationToken cancellationToken);
-    Task<ItemFilterOptions> GetFilterOptionsAsync(Guid ownerId, CancellationToken cancellationToken);
+    Task<ItemFilterOptions> GetFilterOptionsAsync(Guid? ownerId, CancellationToken cancellationToken);
+    Task<ItemFilterOptions> GetPublicOutfitFilterOptionsAsync(CancellationToken cancellationToken);
 }
 
 public sealed class ItemCatalog(IItemCatalogQuery query)
@@ -45,4 +49,10 @@ public sealed class ItemCatalog(IItemCatalogQuery query)
     }
     public Task<ItemPage> GetPublicItemsAsync(ItemCatalogQuery filter, CancellationToken cancellationToken) =>
         query.GetAsync(null, filter.Normalize(), cancellationToken);
+
+    public Task<ItemFilterOptions> GetPublicFilterOptionsAsync(CancellationToken cancellationToken) =>
+        query.GetFilterOptionsAsync(null, cancellationToken);
+
+    public Task<ItemFilterOptions> GetPublicOutfitFilterOptionsAsync(CancellationToken cancellationToken) =>
+        query.GetPublicOutfitFilterOptionsAsync(cancellationToken);
 }

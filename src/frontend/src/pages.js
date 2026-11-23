@@ -1,4 +1,4 @@
-import { activeWardrobeFilters, wardrobeQuery, wardrobeFilters, bindWardrobeFilters } from './wardrobe-filters.js';
+import { activeWardrobeFilters, publicCollectionQuery, wardrobeQuery, wardrobeFilters, bindWardrobeFilters } from './wardrobe-filters.js';
 import { bindWorkspaceActions } from './workspace.js';
 import { avatar } from './components.js';
 import { bindEngagement } from './engagement.js';
@@ -6,7 +6,7 @@ import { bindEngagement } from './engagement.js';
 import { peoplePage, copyAddress, profilePage } from './profiles.js';
 import { ApiError } from './api.js';
 import { passwordConfirmationError } from './auth.js';
-import { badge, categories, collage, crumbs, empty, escape, field, filters, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
+import { badge, categories, collage, crumbs, empty, escape, field, outfitSearch, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
 import { catalogQuery, changedFilter, safeReturn, shareAddress, profilePath, publicPath } from './router.js';
 import { busy, confirmAction, modal, showError } from './ui.js';
 
@@ -74,10 +74,8 @@ export async function dashboard(ctx) {
   return { title: 'Обзор', html: `${title('Ваше пространство', `Здравствуйте, ${ctx.auth.user.displayName}`, 'Всё, что нужно для вашего следующего образа.')}<div class="stats">${[[items.total, 'вещей в гардеробе', '/wardrobe'], [outfits.outfits, 'собранных образов', '/outfits'], [outfits.publicOutfits, 'опубликованных образов', '/outfits']].map(([number, label, path]) => `<a href="#${path}" class="stat"><span><strong>${number}</strong><span>${label}</span></span><span aria-hidden="true">↗</span></a>`).join('')}</div><h2 class="section-title">Быстрые действия</h2><div class="quick-grid"><a href="#/items/new" class="quick-card"><div><h3>Добавить вещь</h3></div><img width="800" height="1000" loading="lazy" src="./src/assets/shirt-large.webp" alt=""></a><a href="#/outfits/new" class="quick-card"><div><h3>Создать образ</h3></div><img width="800" height="1000" loading="lazy" src="./src/assets/outfit-business.webp" alt=""></a></div><div class="section-heading"><h2>Ваша коллекция</h2>${link('/wardrobe', 'Все вещи')}</div>${items.items.length ? `<div class="cards">${items.items.map(i => itemCard(i)).join('')}</div>` : empty('Гардероб начинается с одной вещи', 'Добавьте то, что любите носить.', link('/items/new', 'Добавить вещь', 'btn'))}` };
 }
 
-export function bindFilters(ctx) {
-  document.querySelectorAll('[data-category]').forEach(button => { button.onclick = () => ctx.navigate(changedFilter(ctx.route, 'category', button.dataset.category)); });
+function bindOutfitSearch(ctx) {
   const form = document.querySelector('#catalog-search');
-  if (!form) return;
   form.onsubmit = event => { event.preventDefault(); ctx.navigate(changedFilter(ctx.route, 'search', form.elements.search.value.trim())); };
   form.elements.sort.onchange = () => ctx.navigate(changedFilter(ctx.route, 'sort', form.elements.sort.value));
 }
@@ -89,15 +87,36 @@ export async function wardrobe(ctx) {
 
 export async function outfitsPage(ctx) {
   const page = await ctx.get(`/outfits?${catalogQuery(ctx.route.query)}`);
-  return { title: 'Мои образы', html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${filters(ctx.route, page, true)}${page.items.length ? `<div class="outfit-grid">${page.items.map(o => outfitCard(o)).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline')) : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'))}${pagination(ctx.route, page)}`, bind: () => bindFilters(ctx) };
+  return { title: 'Мои образы', html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${outfitSearch(ctx.route, page)}${page.items.length ? `<div class="outfit-grid">${page.items.map(o => outfitCard(o)).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline')) : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'))}${pagination(ctx.route, page)}`, bind: () => bindOutfitSearch(ctx) };
 }
 
 export async function discover(ctx) {
-  if (ctx.route.query.get('tab') === 'people') return peoplePage(ctx);
-  const itemsTab = ctx.route.query.get('tab') === 'items';
-  const data = await ctx.get(itemsTab ? `/wardrobe?${catalogQuery(ctx.route.query, 'newest')}` : `/wardrobe/outfits?${catalogQuery(ctx.route.query, 'newest')}`);
-  const query = new URLSearchParams(ctx.route.query); query.set('tab', 'items');
-  return { title: 'Открытая коллекция', html: `<section class="discover-intro"><div><h1>Открытая коллекция</h1><p class="lead">Вещи и образы сообщества Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section><div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link('/discover', 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${query}`, 'Вещи', itemsTab ? 'selected' : '')}</nav></div>${itemsTab ? `${filters(ctx.route, data, false, true)}${data.items.length ? `<div class="cards">${data.items.map(i => itemCard(i, '/public/items')).join('')}</div>` : ctx.route.query.get('search') || ctx.route.query.get('category') ? empty('Ничего не найдено', 'Попробуйте другую категорию или измените поиск.', link('/discover?tab=items', 'Сбросить фильтры', 'btn outline')) : empty('Публичных вещей пока нет', 'Здесь появятся вещи, которыми поделятся пользователи.')}${pagination(ctx.route, data)}` : `${filters(ctx.route, data, true, true)}${data.items.length ? `<div class="outfit-grid">${data.items.map(o => outfitCard(o, '/public/outfits')).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените поисковый запрос или сбросьте фильтры.', link('/discover', 'Сбросить фильтры', 'btn outline')) : empty('Публичных образов пока нет', 'В открытой коллекции появятся образы, которыми поделятся пользователи.')}${pagination(ctx.route, data)}`}`, bind: () => bindFilters(ctx) };
+  const { route } = ctx;
+  if (route.query.get('tab') === 'people') return peoplePage(ctx);
+  const itemsTab = route.query.get('tab') === 'items';
+  const endpoint = itemsTab ? '/wardrobe' : '/wardrobe/outfits';
+  const [data, options] = await Promise.all([
+    ctx.get(`${endpoint}?${publicCollectionQuery(route.query)}`),
+    ctx.get(`${endpoint}/filter-options`)
+  ]);
+  const tabs = new URLSearchParams(route.query);
+  tabs.delete('tab');
+  tabs.delete('page');
+  const outfitsPath = tabs.size ? `/discover?${tabs}` : '/discover';
+  tabs.set('tab', 'items');
+  const results = data.items.length
+    ? itemsTab ? `<div class="cards">${data.items.map(item => itemCard(item, '/public/items')).join('')}</div>`
+      : `<div class="outfit-grid">${data.items.map(outfit => outfitCard(outfit, '/public/outfits')).join('')}</div>`
+    : activeWardrobeFilters(route.query, false).length
+      ? empty(itemsTab ? 'Вещи не найдены' : 'Образы не найдены', 'Измените запрос или сбросьте фильтры.')
+      : empty(itemsTab ? 'Публичных вещей пока нет' : 'Публичных образов пока нет', 'Здесь появятся публикации сообщества.');
+  return {
+    title: 'Открытая коллекция',
+    html: `<section class="discover-intro"><div><h1>Открытая коллекция</h1><p class="lead">Вещи и образы сообщества Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section>
+      <div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link(outfitsPath, 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${tabs}`, 'Вещи', itemsTab ? 'selected' : '')}</nav></div>
+      ${wardrobeFilters(route, options, data.total)}${results}${pagination(route, data)}`,
+    bind: () => bindWardrobeFilters(ctx)
+  };
 }
 
 async function publicResource(ctx, kind, id) {

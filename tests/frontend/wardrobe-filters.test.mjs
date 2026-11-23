@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { wardrobeFilters, bindWardrobeFilters, wardrobeQuery } from '../../src/frontend/src/wardrobe-filters.js';
-import { wardrobe } from '../../src/frontend/src/pages.js';
+import { discover, wardrobe } from '../../src/frontend/src/pages.js';
 import { parseRoute } from '../../src/frontend/src/router.js';
 import { pagination } from '../../src/frontend/src/components.js';
 const { JSDOM } = createRequire(new URL('../../src/frontend/package.json', import.meta.url))('jsdom');
@@ -59,4 +59,34 @@ test('advanced selections stay visible when returning to a filtered wardrobe', (
   assert.match(chips[0].getAttribute('aria-label'), /Цвет: Белый.*Убрать фильтр/);
   assert.equal(chips[0].getAttribute('href'), '#/wardrobe?brandMissing=true');
   dom.window.close();
+});
+
+test('public item filters retain the tab, apply missing values and clear pagination', async t => {
+  const route = parseRoute('#/discover?tab=items&brand=studio&page=2');
+  const calls = [];
+  let destination;
+  const page = await discover({ route, navigate: next => { destination = next; }, get: async path => {
+    calls.push(path);
+    return path.endsWith('/filter-options') ? { colors: [null], brands: ['studio'], sizes: [] }
+      : { items: [], total: 0, page: 2, pageSize: 20 };
+  } });
+  const dom = new JSDOM(page.html);
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  t.after(() => { globalThis.document = previous; dom.window.close(); });
+  page.bind();
+  const form = document.querySelector('form');
+  assert.equal(calls[1], '/wardrobe/filter-options');
+  assert.equal(form.elements.publication, undefined);
+  assert.equal(form.elements.sort.value, 'newest');
+  assert.equal(form.querySelector('[data-filter-focus="reset"]').hash, '#/discover?tab=items');
+  assert.equal(form.querySelector('[data-filter-focus="remove-brand"]').hash, '#/discover?tab=items');
+  assert.match(page.html, /Вещи не найдены/);
+  form.elements.color.value = 'missing';
+  form.requestSubmit();
+  const next = parseRoute('#' + destination);
+  assert.equal(next.query.get('tab'), 'items');
+  assert.equal(next.query.get('brand'), 'studio');
+  assert.equal(next.query.get('colorMissing'), 'true');
+  assert.equal(next.query.has('page'), false);
 });

@@ -12,6 +12,10 @@ public static class WardrobeEndpoints
     {
         app.MapGet("/api/wardrobe", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
             await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query, defaultSort: "newest"), context.RequestAborted), false));
+        app.MapGet("/api/wardrobe/filter-options", (ItemCatalog catalog, CancellationToken ct) =>
+            catalog.GetPublicFilterOptionsAsync(ct));
+        app.MapGet("/api/wardrobe/outfits/filter-options", (ItemCatalog catalog, CancellationToken ct) =>
+            catalog.GetPublicOutfitFilterOptionsAsync(ct));
         app.MapGet("/api/wardrobe/outfits", async (HttpContext http, PublicProfiles profiles, CancellationToken ct) =>
         {
             var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query, defaultSort: "newest"), ct);
@@ -69,7 +73,7 @@ public static class WardrobeEndpoints
         var outfits = app.MapGroup("/api/outfits").RequireAuthorization(CurrentActor.PolicyName);
         outfits.MapGet("/", async (HttpContext http, OutfitCatalog catalog) =>
         {
-            var page = await catalog.GetAsync(CurrentActor.Id(http.User), CatalogRequest.Parse(http.Request.Query), http.RequestAborted);
+            var page = await catalog.GetAsync(CurrentActor.Id(http.User), CatalogRequest.Parse(http.Request.Query, itemAttributes: false), http.RequestAborted);
             return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/items/{id}/photo")), page.Total, page.Page, page.PageSize };
         });
         outfits.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>

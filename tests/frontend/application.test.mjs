@@ -204,10 +204,19 @@ test('public outfit detail combines interactions and links to its pieces', async
  assert.match(page.html,/social-panel/);assert.doesNotMatch(page.html,/linebox actions" id="workspace-actions"/);
 });
 
-test('public outfit catalog requests a bounded page and preserves search in pagination', async () => {
- const calls=[];const page=await discover({route:parseRoute('#/discover?search=walk&sort=nameDesc'),get:async path=>{calls.push(path);return{items:[{id:'look',name:'Walk',items:[]}],total:25,page:1,pageSize:20};}});
- assert.equal(calls[0],'/wardrobe/outfits?search=walk&sort=nameDesc&page=1&pageSize=20');
- assert.match(page.html,/catalog-search/);assert.match(page.html,/search=walk/);assert.match(page.html,/page=2/);
+test('public outfit catalog requests options and keeps composed filters in pagination', async () => {
+ const calls = [];
+ const page = await discover({ route: parseRoute('#/discover?search=walk&sort=nameDesc&color=red&size=m'), get: async path => {
+   calls.push(path);
+   return path.endsWith('/filter-options') ? { colors: ['red'], brands: [], sizes: ['m'] }
+     : { items: [{ id: 'look', name: 'Walk', items: [] }], total: 25, page: 1, pageSize: 20 };
+ } });
+ assert.deepEqual(calls, [
+   '/wardrobe/outfits?search=walk&sort=nameDesc&page=1&pageSize=20&color=red&size=m',
+   '/wardrobe/outfits/filter-options'
+ ]);
+ assert.match(page.html, /Фильтры по вещи в образе/);
+ assert.match(page.html, /search=walk&amp;sort=nameDesc&amp;color=red&amp;size=m&amp;page=2/);
 });
 
 test('a direct public outfit read never loads the catalog', async () => {

@@ -27,7 +27,9 @@ public sealed class PersonalCatalogTests
         Assert.Equal("Alpha", Assert.Single(result.Items).Name);
         Assert.Equal(1, result.Total);
         Assert.Equal(2, (await query.GetAsync(owner, new ItemCatalogQuery(Search: "бренд"), default)).Total);
-        Assert.Equal(0, (await query.GetAsync(null, new ItemCatalogQuery(Search: "бренд"), default)).Total);
+        var publicResult = await query.GetAsync(null, new ItemCatalogQuery(Search: "бренд"), default);
+        Assert.Equal(1, publicResult.Total);
+        Assert.Equal("Alpha", Assert.Single(publicResult.Items).Name);
         Assert.Equal("Beta", Assert.Single((await query.GetAsync(owner, new ItemCatalogQuery(Brand: "бренд", Publication: "private"), default)).Items).Name);
         Assert.Equal("Empty", Assert.Single((await query.GetAsync(owner, new ItemCatalogQuery(ColorMissing: true, BrandMissing: true, SizeMissing: true), default)).Items).Name);
         var options = await query.GetFilterOptionsAsync(owner, default);
