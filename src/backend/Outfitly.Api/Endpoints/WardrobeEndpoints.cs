@@ -12,8 +12,16 @@ public static class WardrobeEndpoints
     {
         app.MapGet("/api/wardrobe", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
             await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query), context.RequestAborted), false));
-        app.MapGet("/api/wardrobe/outfits", async (PublicProfiles profiles, CancellationToken ct) => (await profiles.AllOutfitsAsync(ct))
-            .Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/wardrobe/outfits/{outfit.Id}/items/{id}/photo")));
+        app.MapGet("/api/wardrobe/outfits", async (HttpContext http, PublicProfiles profiles, CancellationToken ct) =>
+        {
+            var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query), ct);
+            return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/wardrobe/outfits/{outfit.Id}/items/{id}/photo")), page.Total, page.Page, page.PageSize };
+        });
+        app.MapGet("/api/wardrobe/outfits/{id:guid}", async (Guid id, PublicProfiles profiles, CancellationToken ct) =>
+        {
+            var outfit = await profiles.PublicOutfitAsync(id, ct);
+            return WardrobeResponses.Outfit(outfit, itemId => $"/api/wardrobe/outfits/{outfit.Id}/items/{itemId}/photo");
+        });
         app.MapGet("/api/shared/items/{token}", (string token, WardrobeService service) =>
             service.GetSharedItem(token) is { } item ? Results.Ok(WardrobeResponses.Item(item, $"/api/shared/items/{token}/photo")) : Results.NotFound());
         app.MapGet("/api/shared/outfits/{token}", (string token, WardrobeService service) =>

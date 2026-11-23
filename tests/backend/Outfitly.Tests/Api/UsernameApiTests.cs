@@ -94,8 +94,8 @@ public sealed class UsernameApiTests
         var catalog = await client.GetFromJsonAsync<JsonElement>("/api/wardrobe");
         Assert.Equal("anna", catalog.GetProperty("items")[0].GetProperty("ownerUsername").GetString());
         var legacy = await client.GetFromJsonAsync<JsonElement>("/api/wardrobe/outfits");
-        Assert.Equal(outfitId, legacy[0].GetProperty("id").GetGuid());
-        Assert.Equal("anna", legacy[0].GetProperty("ownerUsername").GetString());
+        Assert.Equal(outfitId, legacy.GetProperty("items")[0].GetProperty("id").GetGuid());
+        Assert.Equal("anna", legacy.GetProperty("items")[0].GetProperty("ownerUsername").GetString());
     }
 
     private static async Task<(Guid Owner, Guid Public, Guid Private, Guid Outfit)> SeedAsync(ApiFactory factory)

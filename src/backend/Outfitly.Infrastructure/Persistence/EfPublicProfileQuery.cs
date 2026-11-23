@@ -54,14 +54,30 @@ public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicPro
         return new(await ViewsAsync(result, ct), total, page, pageSize);
     }
 
-    public async Task<OutfitView?> OutfitAsync(Guid ownerId, Guid id, CancellationToken ct)
+    public async Task<OutfitView?> OutfitAsync(Guid? ownerId, Guid id, CancellationToken ct)
     {
         var outfit = await Outfits(ownerId).SingleOrDefaultAsync(outfit => outfit.Id == id, ct);
         return outfit is null ? null : (await ViewsAsync([outfit], ct)).Single();
     }
 
-    public async Task<IReadOnlyCollection<OutfitView>> AllOutfitsAsync(CancellationToken ct) =>
-        await ViewsAsync(await Outfits(null).OrderBy(outfit => outfit.Name).ThenBy(outfit => outfit.Id).ToArrayAsync(ct), ct);
+    public async Task<PublicPage<OutfitView>> AllOutfitsAsync(ItemCatalogQuery filter, CancellationToken ct)
+    {
+        filter = filter.Normalize();
+        var outfits = Outfits(null);
+        if (filter.Search is { } search)
+        {
+            if (context.Database.IsNpgsql())
+            {
+                var pattern = "%" + search.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+                outfits = outfits.Where(outfit => EF.Functions.ILike(outfit.Name, pattern, "\\"));
+            }
+            else { var term = search.ToLowerInvariant(); outfits = outfits.Where(outfit => outfit.Name.ToLower().Contains(term)); }
+        }
+        var total = await outfits.CountAsync(ct);
+        var ordered = filter.Sort == "nameDesc" ? outfits.OrderByDescending(outfit => outfit.Name) : outfits.OrderBy(outfit => outfit.Name);
+        var selected = await ordered.ThenBy(outfit => outfit.Id).Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToArrayAsync(ct);
+        return new(await ViewsAsync(selected, ct), total, filter.Page, filter.PageSize);
+    }
 
     private async Task<IReadOnlyCollection<OutfitView>> ViewsAsync(Outfit[] outfits, CancellationToken ct)
     {

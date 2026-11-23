@@ -7,6 +7,32 @@ namespace Outfitly.Tests.Api;
 public sealed class CatalogApiTests
 {
     [Fact]
+    public async Task Public_outfits_search_sort_page_and_reject_private_direct_reads()
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid(); await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner); using var guest = factory.CreateClient();
+        var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })).Content.ReadFromJsonAsync<JsonElement>();
+        Guid privateId = default, publicId = default;
+        foreach (var name in new[] { "Walk C", "Walk A", "Walk B", "Walk private", "Other" })
+        {
+            var created = await (await client.PostAsJsonAsync("/api/outfits", new { name })).Content.ReadFromJsonAsync<JsonElement>();
+            var id = created.GetProperty("id").GetGuid();
+            (await client.PostAsync($"/api/outfits/{id}/items/{item.GetProperty("id").GetGuid()}", null)).EnsureSuccessStatusCode();
+            if (name == "Walk private") privateId = id;
+            else { (await client.PatchAsJsonAsync($"/api/outfits/{id}/publication", new { isPublic = true })).EnsureSuccessStatusCode(); publicId = id; }
+        }
+        var page = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe/outfits?search=WALK&sort=nameDesc&pageSize=2&page=2");
+        Assert.Equal(3, page.GetProperty("total").GetInt32());
+        Assert.Equal("Walk A", Assert.Single(page.GetProperty("items").EnumerateArray()).GetProperty("name").GetString());
+        var first = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe/outfits?search=walk&sort=nameDesc&pageSize=2");
+        Assert.Equal(new[] { "Walk C", "Walk B" }, first.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("name").GetString()));
+        Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync($"/api/wardrobe/outfits/{privateId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync($"/api/wardrobe/outfits/{publicId}")).StatusCode);
+        foreach (var invalid in new[] { "page=0", "pageSize=101", "sort=bad", "page=1&page=2" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await guest.GetAsync("/api/wardrobe/outfits?" + invalid)).StatusCode);
+    }
+    [Fact]
     public async Task Catalogs_filter_count_and_page_only_their_own_visible_items()
     {
         using var factory = new ApiFactory();

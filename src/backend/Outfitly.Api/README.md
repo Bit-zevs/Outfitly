@@ -78,7 +78,8 @@ Email обрезается по краям, проверяется на форм
 | --- | --- | --- |
 | GET | `/health` | Проверка работы HTTP-приложения, без проверки БД |
 | GET | `/api/wardrobe` | Публичные вещи, прежний маршрут сохранён |
-| GET | `/api/wardrobe/outfits` | Публичные образы |
+| GET | `/api/wardrobe/outfits` | Публичные образы: search по названию, sort=nameAsc/nameDesc, page=1, pageSize=20 (1–100); ответ items, total, page, pageSize |
+| GET | `/api/wardrobe/outfits/{id}` | Один публичный образ; 404 для личного или отсутствующего |
 | GET | `/api/shared/items/{token}` | Вещь по активной ссылке |
 | GET | `/api/shared/outfits/{token}` | Образ по активной ссылке |
 | GET, POST | `/api/items` | Личный список / создание вещи |
