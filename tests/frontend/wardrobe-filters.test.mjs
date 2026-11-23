@@ -20,7 +20,9 @@ test('form applies all fields together, resets page and restores URL selections'
   form.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   form.elements.sort.dispatchEvent(new dom.window.Event('change'));
   assert.equal(target, undefined);
-  form.dispatchEvent(new dom.window.Event('submit', { cancelable: true }));
+  const apply = form.querySelector('button[type="submit"]');
+  assert.equal(apply?.textContent, 'Применить');
+  apply.click();
   const next = parseRoute(`#${target}`);
   assert.equal(next.query.get('search'), 'cotton'); assert.equal(next.query.get('brandMissing'), 'true');
   assert.equal(next.query.get('color'), 'removed'); assert.equal(next.query.get('size'), 'm');
