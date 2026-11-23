@@ -43,20 +43,59 @@ public sealed class PostgreSqlUsernameTests
     }
 
     [PostgreSqlFact]
-    public async Task Concurrent_registrations_of_case_variants_commit_one_complete_account()
+    public async Task Migration_releases_legacy_pending_nicks_without_changing_verified_profiles_or_tokens()
+    {
+        await using var database = await PostgreSqlDatabase.CreateAsync();
+        await using var context = database.Open();
+        const string previous = "20261123154006_CatalogCreationDates";
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(previous);
+        var service = Service(context);
+        const string password = "a long confirmation password";
+        var pending = await service.RegisterAsync("pending@example.com", "Pending");
+        var verified = await service.RegisterAsync("verified@example.com", "Verified");
+        await context.SaveChangesAsync();
+        (await context.Users.FindAsync(pending.Id))!.ChangeUsername("legacy_pending");
+        await service.ConfirmEmailAsync(verified.Confirmation.Token, password, "verified");
+        await context.SaveChangesAsync();
+
+        await migrator.MigrateAsync();
+        context.ChangeTracker.Clear();
+        var temporary = Assert.IsType<User>(await context.Users.FindAsync(pending.Id)).Username;
+        Assert.StartsWith("~", temporary);
+        Assert.False(await context.Users.AnyAsync(user => user.Username == "legacy_pending"));
+        Assert.Equal("verified", (await context.Users.FindAsync(verified.Id))!.Username);
+        await migrator.MigrateAsync(previous);
+        context.ChangeTracker.Clear();
+        var rollback = (await context.Users.FindAsync(pending.Id))!.Username;
+        Assert.Equal(rollback, Usernames.Normalize(rollback));
+        await migrator.MigrateAsync();
+        context.ChangeTracker.Clear();
+        Assert.Equal(temporary, (await context.Users.FindAsync(pending.Id))!.Username);
+        await service.ConfirmEmailAsync(pending.Confirmation.Token, password, "legacy_pending");
+        await context.SaveChangesAsync();
+        Assert.Equal(pending.Id, (await context.Users.SingleAsync(user => user.Username == "legacy_pending")).Id);
+    }
+
+    [PostgreSqlFact]
+    public async Task Concurrent_confirmations_of_case_variants_claim_the_nick_once()
     {
         await using var database = await PostgreSqlDatabase.CreateAsync();
         await using var first = database.Open();
         await using var second = database.Open();
-        await Service(first).RegisterAsync("first@example.com", "First", " @ANNA ");
-        await Service(second).RegisterAsync("second@example.com", "Second", "anna");
+        var a = await Service(first).RegisterAsync("first@example.com", "First");
+        var b = await Service(second).RegisterAsync("second@example.com", "Second");
+        await first.SaveChangesAsync();
+        await second.SaveChangesAsync();
+        await Service(first).ConfirmEmailAsync(a.Confirmation.Token, "a long confirmation password", " @ANNA ");
+        await Service(second).ConfirmEmailAsync(b.Confirmation.Token, "a long confirmation password", "anna");
         var results = await Task.WhenAll(Commit(first), Commit(second));
         Assert.Single(results, error => error is null);
         Assert.IsType<UsernameConflictException>(Assert.Single(results, error => error is not null));
         await using var read = database.Open();
-        var user = await read.Users.SingleAsync();
-        Assert.Equal("anna", user.Username);
-        Assert.Equal(user.Id, (await read.Accounts.SingleAsync()).UserId);
+        var user = await read.Users.SingleAsync(user => user.Username == "anna");
+        Assert.Equal(user.Id, (await read.Accounts.SingleAsync(account => account.EmailConfirmed)).UserId);
+        Assert.Equal(2, await read.Accounts.CountAsync());
     }
 
     [PostgreSqlFact]
@@ -66,12 +105,12 @@ public sealed class PostgreSqlUsernameTests
         Guid firstId, secondId;
         await using (var seed = database.Open())
         {
-            var first = await Service(seed).RegisterAsync("first@example.com", "First", "first");
-            var second = await Service(seed).RegisterAsync("second@example.com", "Second", "second");
+            var first = await Service(seed).RegisterAsync("first@example.com", "First");
+            var second = await Service(seed).RegisterAsync("second@example.com", "Second");
             firstId = first.Id; secondId = second.Id;
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token, "long password one");
-            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token, "long password two");
+            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token, "long password one", "first");
+            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token, "long password two", "second");
             await seed.SaveChangesAsync();
         }
         await using (var first = database.Open())
@@ -103,11 +142,11 @@ public sealed class PostgreSqlUsernameTests
         Guid ownerId, publicId, privateId, outfitId;
         await using (var seed = database.Open())
         {
-            var owner = await Service(seed).RegisterAsync("owner@example.com", "Анна", "anna_style");
-            var other = await Service(seed).RegisterAsync("other@example.com", "Other", "annaxstyle");
+            var owner = await Service(seed).RegisterAsync("owner@example.com", "Анна");
+            var other = await Service(seed).RegisterAsync("other@example.com", "Other");
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token, "long password one");
-            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token, "long password two");
+            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token, "long password one", "anna_style");
+            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token, "long password two", "annaxstyle");
             ownerId = owner.Id;
             var wardrobe = new WardrobeService(new EfWardrobeRepository(seed));
             publicId = wardrobe.CreateItem(ownerId, "Public", ClothingCategory.Top).Id;

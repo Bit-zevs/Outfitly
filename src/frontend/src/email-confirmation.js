@@ -27,14 +27,15 @@ export function confirmEmailPage(ctx) {
   const token = ctx.route.query.get('token');
   const success = ctx.route.query.get('confirmed') === '1';
   const passwordFields = token && !success ? `<form id="confirm-email-form">
+    ${field('Ник', 'username', '', { required: true, autocomplete: 'username', max: 31, hint: '3–30 символов. Начните с латинской буквы. Можно использовать латиницу, цифры и _.' })}
     ${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: 'new-password', min: 8, max: 128, hint: 'От 8 до 128 символов.' })}
     ${field('Повторите пароль', 'passwordConfirmation', '', { type: 'password', required: true, autocomplete: 'new-password', max: 128 })}
     <button class="btn" type="submit">Сохранить пароль и подтвердить почту</button>
   </form>` : '';
-  return { title: 'Подтверждение почты', html: `<section class="account email-flow"><h1>Подтверждение почты</h1><p id="confirmation-status" role="status">${success ? 'Почта подтверждена. Войдите с вашим паролем.' : token ? 'Придумайте пароль, чтобы подтвердить почту и завершить регистрацию.' : 'Ссылка недействительна. Запросите новое письмо.'}</p>${passwordFields}<div class="actions">${link('/login', 'Войти', 'btn outline')}${!success && !ctx.auth?.user ? link('/check-email', 'Получить новое письмо', 'btn outline') : ''}</div></section>`, bind() {
+  return { title: 'Подтверждение почты', html: `<section class="account email-flow"><h1>Подтверждение почты</h1><p id="confirmation-status" role="status">${success ? 'Почта подтверждена. Войдите с вашим паролем.' : token ? 'Выберите ник и придумайте пароль, чтобы завершить регистрацию.' : 'Ссылка недействительна. Запросите новое письмо.'}</p>${passwordFields}<div class="actions">${link('/login', 'Войти', 'btn outline')}${!success && !ctx.auth?.user ? link('/check-email', 'Получить новое письмо', 'btn outline') : ''}</div></section>`, bind() {
     const form = document.querySelector('#confirm-email-form');
     if (!form) return;
-    const { password, passwordConfirmation } = form.elements;
+    const { password, passwordConfirmation, username } = form.elements;
     form.oninput = () => passwordConfirmation.setCustomValidity('');
     form.onsubmit = async event => {
       event.preventDefault();
@@ -46,16 +47,23 @@ export function confirmEmailPage(ctx) {
         return;
       }
       busy(form, true);
+      let chooseAnotherNick = false;
       try {
-        await ctx.auth.confirmEmail(token, password.value, passwordConfirmation.value);
+        await ctx.auth.confirmEmail(token, password.value, passwordConfirmation.value, username.value);
         if (ctx.isCurrent()) ctx.navigate('/confirm-email?confirmed=1', true);
       } catch (error) {
+        chooseAnotherNick = error.problem?.code === 'username_taken';
         if (ctx.isCurrent()) document.querySelector('#confirmation-status').textContent =
-          error.problem?.code === 'invalid_confirmation_token' ? 'Ссылка недействительна, уже использована или срок её действия истёк. Запросите новое письмо.'
+          chooseAnotherNick ? 'Этот ник уже занят. Выберите другой.'
+            : error.problem?.code === 'invalid_confirmation_token' ? 'Ссылка недействительна, уже использована или срок её действия истёк. Запросите новое письмо.'
             : error.status === 429 ? 'Слишком много попыток. Подождите минуту.'
               : error.status === 409 ? 'Состояние подтверждения изменилось. Используйте последнее письмо или попробуйте войти.'
-                : 'Не удалось подтвердить почту. Попробуйте позже.';
-      } finally { busy(form, false); }
+                : error.status === 400 ? 'Проверьте ник и пароль и попробуйте ещё раз.'
+                  : 'Не удалось подтвердить почту. Попробуйте позже.';
+      } finally {
+        busy(form, false);
+        if (chooseAnotherNick && ctx.isCurrent()) username.focus();
+      }
     };
   } };
 }

@@ -84,7 +84,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
         await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Database.EnsureCreatedAsync();
     }
 
-    internal async Task ConfirmEmailAsync(HttpClient client, string email, string password)
+    internal async Task ConfirmEmailAsync(HttpClient client, string email, string password, string? username = null)
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -92,7 +92,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
             .Select(a => (bool?)a.EmailConfirmed).SingleOrDefaultAsync();
         if (confirmed != false) return;
         await SetCsrfAsync(client);
-        (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = Mail.Emails[email.Trim()].Token, password })).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = Mail.Emails[email.Trim()].Token, password, username = username ?? "test_" + Guid.NewGuid().ToString("N")[..20] })).EnsureSuccessStatusCode();
     }
 
     internal async Task<HttpClient> OwnerClientAsync(Guid id)

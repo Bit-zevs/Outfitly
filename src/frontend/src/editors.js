@@ -66,6 +66,7 @@ export async function itemEditor(ctx, id) {
     const saveButton = document.querySelector('#save-item');
     const fileInput = form.querySelector('#file');
     const fileError = form.querySelector('#file-error');
+    const fileName = form.querySelector('#file-name');
     const clearFileError = () => { fileError.textContent = ''; fileInput.removeAttribute('aria-invalid'); };
     let locked = false;
     const checkRequired = requiredValidation(form, [
@@ -81,6 +82,12 @@ export async function itemEditor(ctx, id) {
       target.append(frame);
     }
     function mode() {
+      if (!draft.file && previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        fileInput.value = '';
+        fileName.textContent = '';
+      }
       draft.photoMode = form.elements.photoMode.value;
       document.querySelector('#file-panel').hidden = draft.photoMode !== 'file';
       document.querySelector('#url-panel').hidden = draft.photoMode !== 'url';
@@ -96,10 +103,23 @@ export async function itemEditor(ctx, id) {
       if (!file) return;
       const message = validatePhoto(file);
       clearFileError();
-      if (message) { event.target.value = ''; fileInput.setAttribute('aria-invalid', 'true'); fileError.textContent = message; fileInput.focus(); return; }
+      if (message) {
+        fileInput.value = '';
+        fileName.textContent = '';
+        draft.file = null;
+        draft.restoredPhotoUrl = null;
+        draft.discardStagedPhoto = true;
+        mode();
+        ctx.setDirty(true);
+        autosave?.changed();
+        fileInput.setAttribute('aria-invalid', 'true');
+        fileError.textContent = message;
+        fileInput.focus();
+        return;
+      }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       draft.file = file; draft.removePhoto = false; previewUrl = URL.createObjectURL(file);
-      document.querySelector('#file-name').textContent = file.name;
+      fileName.textContent = file.name;
       error.hidden = true; mode(); ctx.setDirty(true); autosave?.changed();
     };
     document.querySelector('#remove-photo').onclick = () => {

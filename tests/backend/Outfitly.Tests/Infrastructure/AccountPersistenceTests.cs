@@ -18,9 +18,9 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
-            var registered = await service.RegisterAsync("alice@example.com", "Alice", "alice");
+            var registered = await service.RegisterAsync("alice@example.com", "Alice");
             await write.SaveChangesAsync();
-            await service.ConfirmEmailAsync(registered.Confirmation.Token, password);
+            await service.ConfirmEmailAsync(registered.Confirmation.Token, password, "alice");
             (await write.Accounts.SingleAsync()).PasswordHash = oldHash;
             await write.SaveChangesAsync();
         }
@@ -49,17 +49,17 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
-            var registered = await service.RegisterAsync("boundary@example.com", "Boundary", "boundary");
+            var registered = await service.RegisterAsync("boundary@example.com", "Boundary");
             await write.SaveChangesAsync();
             var password = new string('a', length);
             if (accepted)
             {
-                await service.ConfirmEmailAsync(registered.Confirmation.Token, password);
+                await service.ConfirmEmailAsync(registered.Confirmation.Token, password, "boundary");
                 await write.SaveChangesAsync();
             }
             else
                 await Assert.ThrowsAsync<ArgumentException>(() =>
-                    service.ConfirmEmailAsync(registered.Confirmation.Token, password));
+                    service.ConfirmEmailAsync(registered.Confirmation.Token, password, "boundary"));
         }
         await using var read = database.Open();
         var account = await read.Accounts.SingleAsync();

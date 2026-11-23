@@ -15,9 +15,9 @@ public sealed class PasswordResetPersistenceTests
     {
         await using var db = open();
         var service = Service(db, clock);
-        var registered = await service.RegisterAsync(Email, "Reset", "reset");
+        var registered = await service.RegisterAsync(Email, "Reset");
         await db.SaveChangesAsync();
-        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password);
+        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password, "reset");
         await db.SaveChangesAsync();
         var email = await service.RequestPasswordResetAsync(Email);
         await db.SaveChangesAsync();

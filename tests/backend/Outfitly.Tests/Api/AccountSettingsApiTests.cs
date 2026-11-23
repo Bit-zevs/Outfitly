@@ -17,7 +17,7 @@ public sealed class AccountSettingsApiTests
         await factory.InitializeDatabaseAsync();
         await ApiFactory.SetCsrfAsync(client);
         (await client.PostAsJsonAsync("/api/auth/register", new { email = Email, password = Password, displayName = "Original", username = "original" })).EnsureSuccessStatusCode();
-        await factory.ConfirmEmailAsync(client, Email, Password);
+        await factory.ConfirmEmailAsync(client, Email, Password, "original");
         var login = await client.PostAsJsonAsync("/api/auth/login", new { email = Email, password = Password });
         login.EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(client);
@@ -116,7 +116,7 @@ public sealed class AccountSettingsApiTests
         using (var scope = factory.Services.CreateScope())
         {
             var accounts = scope.ServiceProvider.GetRequiredService<AccountService>();
-            await accounts.RegisterAsync("occupied@example.com", "Other", "other");
+            await accounts.RegisterAsync("occupied@example.com", "Other");
             await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().SaveChangesAsync();
         }
         var conflict = await client.PostAsJsonAsync("/api/auth/confirm-email-change", new { token });
@@ -139,10 +139,10 @@ public sealed class AccountSettingsApiTests
         using (var scope = factory.Services.CreateScope())
         {
             var accounts = scope.ServiceProvider.GetRequiredService<AccountService>();
-            var registered = await accounts.RegisterAsync("other@example.com", "Other", "other");
+            var registered = await accounts.RegisterAsync("other@example.com", "Other");
             var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
             await db.SaveChangesAsync();
-            await accounts.ConfirmEmailAsync(registered.Confirmation.Token, Password);
+            await accounts.ConfirmEmailAsync(registered.Confirmation.Token, Password, "other");
             await db.SaveChangesAsync();
         }
         await ApiFactory.SetCsrfAsync(other);

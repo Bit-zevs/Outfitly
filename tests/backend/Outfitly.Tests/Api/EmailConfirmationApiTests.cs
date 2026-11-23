@@ -49,7 +49,7 @@ public sealed class EmailConfirmationApiTests
         var original = factory.Mail.Emails[Email];
         await AllowResend(factory);
         failure.Enabled = true;
-        var response = resend ? await Resend(client) : await client.PostAsJsonAsync("/api/auth/confirm-email", new { original.Token, Password });
+        var response = resend ? await Resend(client) : await client.PostAsJsonAsync("/api/auth/confirm-email", new { original.Token, Password, username = "confirm" });
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal(original, factory.Mail.Emails[Email]);
         using (var read = factory.Services.CreateScope())
@@ -59,7 +59,7 @@ public sealed class EmailConfirmationApiTests
             Assert.Empty(await db.LoginSessions.ToListAsync());
         }
         failure.Enabled = false;
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { original.Token, Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { original.Token, Password, username = "confirm" })).StatusCode);
     }
 
     [Theory]
@@ -100,12 +100,12 @@ public sealed class EmailConfirmationApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/auth/login", new { email = Email, password = "incorrect password" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token })).StatusCode);
-        var confirmed = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password });
+        var confirmed = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password, username = "confirm" });
         var oldPassword = await client.PostAsJsonAsync("/api/auth/login", new { email = Email, password = "password sent at registration" });
         Assert.Equal(HttpStatusCode.Unauthorized, oldPassword.StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, confirmed.StatusCode);
         Assert.False(confirmed.Headers.Contains("Set-Cookie"));
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password, username = "confirm" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email = Email, password = Password })).StatusCode);
         using var read = factory.Services.CreateScope();
         var saved = read.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -136,8 +136,8 @@ public sealed class EmailConfirmationApiTests
         Assert.Equal(HttpStatusCode.Accepted, (await Resend(client)).StatusCode);
         var newToken = factory.Mail.Emails[Email].Token;
         Assert.NotEqual(oldToken, newToken);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = oldToken, Password })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = newToken, Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = oldToken, Password, username = "confirm" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = newToken, Password, username = "confirm" })).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await Resend(client)).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/resend-confirmation", new { email = "missing@example.com" })).StatusCode);
         Assert.Equal(newToken, factory.Mail.Emails[Email].Token);
@@ -170,7 +170,7 @@ public sealed class EmailConfirmationApiTests
         }
         foreach (var token in new[] { factory.Mail.Emails[Email].Token, "invalid", new string('A', 43) })
         {
-            var response = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password });
+            var response = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password, username = "confirm" });
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
             Assert.Equal("invalid_confirmation_token", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         }

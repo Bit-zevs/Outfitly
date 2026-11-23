@@ -47,7 +47,22 @@ public static class SupportEndpoints
     private static string Value(IFormCollection form, string name)
     { var values = form[name]; if (values.Count > 1) throw new ArgumentException("Repeated field."); return values.ToString(); }
     private static async Task<IFormCollection> Form(HttpContext http)
-    { if (!http.Request.HasFormContentType || !http.Request.ContentType!.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Use multipart/form-data."); return await http.Request.ReadFormAsync(http.RequestAborted); }
+    {
+        if (!http.Request.HasFormContentType || !http.Request.ContentType!.StartsWith("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Use multipart/form-data.");
+        try
+        {
+            return await http.Request.ReadFormAsync(http.RequestAborted);
+        }
+        catch (InvalidDataException)
+        {
+            throw new ArgumentException("Invalid multipart form.");
+        }
+        catch (IOException error) when (error is not BadHttpRequestException && !http.RequestAborted.IsCancellationRequested)
+        {
+            throw new ArgumentException("Invalid multipart form.");
+        }
+    }
     private static async Task<IReadOnlyCollection<SupportUpload>> Uploads(IFormCollection form, CancellationToken token)
     {
         if (form.Files.Count > 3) throw new ArgumentException("At most three images.");

@@ -73,7 +73,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (kind === 'items') {
       if (form.elements.visibility) form.elements.visibility.checked = Boolean(content.isPublic);
       form.elements.photoMode.value = content.photoMode; draft.photoMode = content.photoMode; draft.file = null; uploadedFile = null;
-      draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl;
+      draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl; draft.discardStagedPhoto = false;
     } else {
       const items = await Promise.all((content.itemIds || []).map(async itemId => {
         try { return await ctx.get(`/items/${itemId}`); } catch (e) { if (e.status === 404 || e.status === 403) return { id: itemId, name: 'Недоступная вещь', category: '', photoUrl: null }; throw e; }
@@ -133,14 +133,15 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (finalizing || completed) return;
     if (running) { await running; if (active() && savedGeneration !== generation) return flush(); return; }
     if (stored && savedGeneration === generation) return;
-    const mine = generation, content = snapshot(), file = draft.file;
+    const mine = generation, content = snapshot(), file = draft.file, discardStagedPhoto = draft.discardStagedPhoto;
     status('Сохраняем черновик…');
     running = (async () => {
       stored = await request(`/drafts/${draftId}`, { method: 'PUT', body: { kind, targetId: id || null, version: stored?.version || null, baseVersion, content } });
       if (kind === 'items' && content.photoMode === 'file' && file && (file !== uploadedFile || !stored.photoUrl)) {
         const data = new FormData(); data.append('file', file);
         stored = await request(`/drafts/${draftId}/photo?version=${stored.version}`, { method: 'PUT', body: data }); uploadedFile = file;
-      } else if (stored.photoUrl && content.removePhoto) {
+        if (draft.file === file) draft.discardStagedPhoto = false;
+      } else if (stored.photoUrl && (content.removePhoto || discardStagedPhoto)) {
         stored = await request(`/drafts/${draftId}/photo?version=${stored.version}`, { method: 'DELETE' }); uploadedFile = null;
       }
       savedGeneration = mine;

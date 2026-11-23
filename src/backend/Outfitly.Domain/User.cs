@@ -8,11 +8,20 @@ public sealed class User
     public string? AvatarStorageKey { get; private set; }
     public string Username { get; private set; }
 
+    private User() { DisplayName = null!; Username = null!; }
+
     public User(Guid id, string displayName, string? username = null)
+        : this(id, displayName, username, pendingRegistration: false) { }
+
+    public static User ForRegistration(Guid id, string displayName) =>
+        new(id, displayName, null, pendingRegistration: true);
+
+    private User(Guid id, string displayName, string? username, bool pendingRegistration)
     {
         Id = Guard.Id(id);
         DisplayName = Guard.Name(displayName);
-        Username = username is null ? Usernames.FromId(id) : Usernames.Normalize(username);
+        Username = pendingRegistration ? Usernames.Pending(id)
+            : username is null ? Usernames.FromId(id) : Usernames.Normalize(username);
     }
 
     public void SetBio(string? bio)

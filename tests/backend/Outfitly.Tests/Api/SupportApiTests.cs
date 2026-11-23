@@ -17,6 +17,23 @@ public sealed class SupportApiTests
         }
         return form;
     }
+
+    [Theory]
+    [InlineData("multipart/form-data", "body without a boundary")]
+    [InlineData("multipart/form-data; boundary=outfitly", "--outfitly\r\nContent-Disposition: form-data; name=\"text\"\r\n\r\nInterrupted")]
+    public async Task Malformed_multipart_returns_bad_request_and_writes_nothing(string contentType, string body)
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner);
+        using var request = new StringContent(body);
+        request.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        using var response = await client.PostAsync("/api/support/tickets", request);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(0, (await client.GetFromJsonAsync<JsonElement>("/api/support/tickets")).GetProperty("total").GetInt32());
+    }
     private static byte[] Image()
     {
         using var bitmap = new SkiaSharp.SKBitmap(2, 2);

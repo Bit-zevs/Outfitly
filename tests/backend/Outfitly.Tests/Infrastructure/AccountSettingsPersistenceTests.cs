@@ -16,9 +16,9 @@ public sealed class AccountSettingsPersistenceTests
     {
         await using var db = open();
         var service = Service(db, clock);
-        var registered = await service.RegisterAsync(OldEmail, "Original", "original");
+        var registered = await service.RegisterAsync(OldEmail, "Original");
         await db.SaveChangesAsync();
-        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password);
+        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password, "original");
         await db.SaveChangesAsync();
         await service.LoginAsync(OldEmail, Password);
         await db.SaveChangesAsync();
@@ -49,7 +49,7 @@ public sealed class AccountSettingsPersistenceTests
             Assert.Equal(64, account.EmailChangeTokenHash!.Length);
             Assert.DoesNotContain(await read.LoginSessions.ToArrayAsync(), session => session.IsRevoked);
             await Assert.ThrowsAsync<ConfirmationTooFrequentException>(() => Service(read, clock).RequestEmailChangeAsync(id, NewEmail, Password));
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(original, Password));
+            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(original, Password, "original"));
             await Assert.ThrowsAsync<InvalidPasswordResetTokenException>(() => Service(read, clock).ResetPasswordAsync(original, "replacement password"));
         }
         clock.Now = clock.Now.AddSeconds(60);
@@ -147,7 +147,10 @@ public sealed class AccountSettingsPersistenceTests
         var id = await Seed(database.Open);
         await using (var seed = database.Open())
         {
-            await Service(seed).RegisterAsync("other@example.com", "Other", "occupied");
+            var service = Service(seed);
+            var other = await service.RegisterAsync("other@example.com", "Other");
+            await seed.SaveChangesAsync();
+            await service.ConfirmEmailAsync(other.Confirmation.Token, Password, "occupied");
             await seed.SaveChangesAsync();
         }
         await using (var change = database.Open())

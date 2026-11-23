@@ -8,13 +8,11 @@ namespace Outfitly.Application.Authentication;
 // Prepares changes only; the HTTP boundary commits before issuing a cookie.
 public sealed partial class AccountService(IAccountStore store, IAccountPasswordHasher passwords, TimeProvider clock)
 {
-    public async Task<RegisteredAccount> RegisterAsync(string email, string displayName, string username,
+    public async Task<RegisteredAccount> RegisterAsync(string email, string displayName,
         CancellationToken cancellationToken = default)
     {
         var address = Email(email);
-        var user = new User(Guid.NewGuid(), displayName, Usernames.Normalize(username));
-        if (await store.UsernameExistsAsync(user.Username, user.Id, cancellationToken))
-            throw new UsernameConflictException();
+        var user = User.ForRegistration(Guid.NewGuid(), displayName);
         if (await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken) is not null)
             throw new AccountConflictException();
         var account = new Account
@@ -24,7 +22,7 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         };
         var confirmation = IssueConfirmation(account);
         store.Add(user, account);
-        return new RegisteredAccount(user.Id, address, user.DisplayName, user.Username, confirmation);
+        return new RegisteredAccount(user.Id, address, user.DisplayName, confirmation);
     }
 
     public async Task<ConfirmationEmail?> ResendConfirmationAsync(string email, CancellationToken cancellationToken = default)
@@ -36,7 +34,7 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         return IssueConfirmation(account);
     }
 
-    public async Task ConfirmEmailAsync(string token, string password, CancellationToken cancellationToken = default)
+    public async Task ConfirmEmailAsync(string token, string password, string username, CancellationToken cancellationToken = default)
     {
         if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
             throw new InvalidConfirmationTokenException();
@@ -44,6 +42,11 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         if (account is null || account.EmailConfirmed || account.ConfirmationExpiresAtUtc is not { } expires ||
             expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidConfirmationTokenException();
         ValidatePassword(password);
+        var normalized = Usernames.Normalize(username);
+        var user = await store.FindUserAsync(account.UserId, cancellationToken) ?? throw new InvalidConfirmationTokenException();
+        if (await store.UsernameExistsAsync(normalized, user.Id, cancellationToken))
+            throw new UsernameConflictException();
+        user.ChangeUsername(normalized);
         account.PasswordHash = passwords.Hash(password);
         account.EmailConfirmed = true;
         account.ConfirmationTokenHash = null;

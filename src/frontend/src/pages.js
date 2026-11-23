@@ -16,7 +16,7 @@ export function home(ctx) {
 export function authPage(ctx, register) {
   const { route } = ctx;
   const returnTo = route.query.get('return');
-  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><h1>${register ? 'Создать аккаунт' : 'Войти'}</h1><p class="lead">${register ? 'Задайте пароль после перехода по ссылке из письма.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) + field('@username', 'username', '', { required: true, autocomplete: 'username', max: 31, hint: '3–30 символов: латиница, цифры и _. Начните с буквы.' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${register ? '' : `${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: 'current-password', max: 128 })}<label class="check-label"><input type="checkbox" id="show-password">Показать пароль</label>`}<p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт' : 'Войти'}</button></form>${!register ? link('/forgot-password', 'Забыли пароль?') : ''}<p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
+  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><h1>${register ? 'Создать аккаунт' : 'Войти'}</h1><p class="lead">${register ? 'Задайте ник и пароль после перехода по ссылке из письма.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${register ? '' : `${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: 'current-password', max: 128 })}<label class="check-label"><input type="checkbox" id="show-password">Показать пароль</label>`}<p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт' : 'Войти'}</button></form>${!register ? link('/forgot-password', 'Забыли пароль?') : ''}<p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
     const form = document.querySelector('#auth-form');
     if (!register) document.querySelector('#show-password').onchange = ({ target }) => {
       form.elements.password.type = target.checked ? 'text' : 'password';
@@ -30,7 +30,7 @@ export function authPage(ctx, register) {
       document.querySelector('#form-error').hidden = true;
       try {
         if (register) {
-          await ctx.auth.register(values.displayName, values.email, values.username);
+          await ctx.auth.register(values.displayName, values.email);
           if (!ctx.isCurrent()) return;
           ctx.navigate(`/check-email?email=${encodeURIComponent(values.email)}${returnTo ? `&return=${encodeURIComponent(returnTo)}` : ''}`);
         } else {
@@ -40,7 +40,6 @@ export function authPage(ctx, register) {
       } catch (error) {
         if (!ctx.isCurrent()) return;
         if (!register && error.status === 401) showError(document.querySelector('#form-error'), new ApiError(400), 'Email или пароль неверны. ');
-        else if (register && error.status === 409) { const el = document.querySelector('#form-error'); el.hidden = false; el.textContent = error.problem?.code === 'username_taken' ? 'Этот @username уже занят. Выберите другой.' : 'Не удалось завершить регистрацию. Попробуйте ещё раз.'; el.focus(); }
         else showError(document.querySelector('#form-error'), error);
       } finally { busy(form, false); }
     };

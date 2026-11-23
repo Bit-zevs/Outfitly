@@ -157,7 +157,7 @@ public sealed class SocialProfileApiTests
     {
         var client = factory.CreateClient(); await ApiFactory.SetCsrfAsync(client);
         (await client.PostAsJsonAsync("/api/auth/register", new { email = name + "@example.com", username = name, displayName = name, password = "long password 123" })).EnsureSuccessStatusCode();
-        await factory.ConfirmEmailAsync(client, name + "@example.com", "long password 123");
+        await factory.ConfirmEmailAsync(client, name + "@example.com", "long password 123", name);
         (await client.PostAsJsonAsync("/api/auth/login", new { email = name + "@example.com", password = "long password 123" })).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(client); return client;
     }

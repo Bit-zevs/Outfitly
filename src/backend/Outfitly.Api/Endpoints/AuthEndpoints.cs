@@ -32,7 +32,7 @@ public static class AuthEndpoints
             ConfirmationEmail confirmation;
             try
             {
-                var user = await accounts.RegisterAsync(request.Email, request.DisplayName, request.Username, cancellationToken);
+                var user = await accounts.RegisterAsync(request.Email, request.DisplayName, cancellationToken);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 confirmation = user.Confirmation;
             }
@@ -43,7 +43,7 @@ public static class AuthEndpoints
         auth.MapPost("/confirm-email", async (ConfirmEmailRequest request, AccountService accounts,
             IUnitOfWork unitOfWork, CancellationToken cancellationToken) =>
         {
-            await accounts.ConfirmEmailAsync(request.Token, request.Password, cancellationToken);
+            await accounts.ConfirmEmailAsync(request.Token, request.Password, request.Username, cancellationToken);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             return Results.NoContent();
         }).RequireRateLimiting("account-access");
@@ -125,10 +125,10 @@ public static class AuthEndpoints
     private static IResult ConfirmationAccepted() =>
         Results.Accepted(value: new { message = "If confirmation is needed, check your email for instructions." });
 
-    public sealed record RegisterRequest(string Email, string DisplayName, string Username);
+    public sealed record RegisterRequest(string Email, string DisplayName);
     public sealed record UsernameRequest(string Username);
     public sealed record LoginRequest(string Email, string Password);
     public sealed record ResetPasswordRequest(string Token, string Password);
-    public sealed record ConfirmEmailRequest(string Token, string Password);
+    public sealed record ConfirmEmailRequest(string Token, string Password, string Username);
     public sealed record ResendConfirmationRequest(string Email);
 }

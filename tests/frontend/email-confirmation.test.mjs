@@ -19,6 +19,7 @@ function mount(t, page) {
 
 function fillPassword(form) {
   form.elements.password.value = form.elements.passwordConfirmation.value = 'new long password';
+  form.elements.username.value = 'atelier';
 }
 
 test('opening confirmation link sends nothing; explicit submission confirms and removes token', async t => {
@@ -30,7 +31,7 @@ test('opening confirmation link sends nothing; explicit submission confirms and 
   const form = document.querySelector('form');
   fillPassword(form);
   await form.onsubmit({ preventDefault() {} });
-  assert.deepEqual(calls, [['secret-token', 'new long password', 'new long password']]);
+  assert.deepEqual(calls, [['secret-token', 'new long password', 'new long password', 'atelier']]);
   assert.deepEqual(navigations, [['/confirm-email?confirmed=1', true]]);
 });
 
@@ -69,19 +70,19 @@ test('registration requests only profile and email, then shows generic instructi
   mount(t, authPage(ctx, true));
   const form = document.querySelector('form');
   form.elements.displayName.value = 'Alice'; form.elements.email.value = 'a@example.com';
-  form.elements.username.value = 'alice';
+  assert.equal(form.elements.username, undefined);
   assert.equal(form.elements.password, undefined);
   await form.onsubmit({ preventDefault() {} });
-  assert.deepEqual(requests, [['Alice', 'a@example.com', 'alice']]);
+  assert.deepEqual(requests, [['Alice', 'a@example.com']]);
   assert.deepEqual(routes, ['/check-email?email=a%40example.com']);
 });
 
 test('auth confirmation and resend use anonymous POST bodies without creating local session', async () => {
   const calls = [];
   const auth = createAuth({ async request(...args) { calls.push(args); } });
-  await auth.confirmEmail('token', 'new long password', 'new long password'); await auth.resendConfirmation('a@example.com');
+  await auth.confirmEmail('token', 'new long password', 'new long password', 'atelier'); await auth.resendConfirmation('a@example.com');
   assert.deepEqual(calls, [
-    ['/auth/confirm-email', { method: 'POST', body: { token: 'token', password: 'new long password' }, anonymous: true }],
+    ['/auth/confirm-email', { method: 'POST', body: { token: 'token', password: 'new long password', username: 'atelier' }, anonymous: true }],
     ['/auth/resend-confirmation', { method: 'POST', body: { email: 'a@example.com' }, anonymous: true }],
   ]);
   assert.equal(auth.user, null);
