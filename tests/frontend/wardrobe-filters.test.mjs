@@ -83,10 +83,42 @@ test('public item filters retain the tab, apply missing values and clear paginat
   assert.equal(form.querySelector('[data-filter-focus="remove-brand"]').hash, '#/discover?tab=items');
   assert.match(page.html, /Вещи не найдены/);
   form.elements.color.value = 'missing';
+  form.elements.sort.value = 'likes';
+  form.elements.sort.dispatchEvent(new dom.window.Event('change'));
+  const sorted = parseRoute('#' + destination);
+  assert.equal(sorted.query.get('sort'), 'likes');
+  assert.equal(sorted.query.get('brand'), 'studio');
+  assert.equal(sorted.query.has('colorMissing'), false);
+  assert.equal(form.elements.color.value, 'missing');
   form.requestSubmit();
   const next = parseRoute('#' + destination);
   assert.equal(next.query.get('tab'), 'items');
   assert.equal(next.query.get('brand'), 'studio');
   assert.equal(next.query.get('colorMissing'), 'true');
   assert.equal(next.query.has('page'), false);
+});
+
+test('unavailable filter options can be retried without replacing results or edited fields', async t => {
+  let optionsRequests = 0;
+  const page = await discover({ route: parseRoute('#/discover?tab=items'), get: async path => {
+    if (path.endsWith('/filter-options')) {
+      if (++optionsRequests === 1) throw new Error('offline');
+      return { colors: ['red'], brands: [], sizes: [] };
+    }
+    return { items: [{ id: 'one', name: 'Coat', category: 'Outerwear' }], total: 1, page: 1, pageSize: 20 };
+  } });
+  const dom = new JSDOM(page.html);
+  const previous = globalThis.document;
+  globalThis.document = dom.window.document;
+  t.after(() => { globalThis.document = previous; dom.window.close(); });
+  page.bind();
+  const card = document.querySelector('.item-card');
+  const form = document.querySelector('#wardrobe-filters');
+  form.elements.search.value = 'тренч';
+  form.querySelector('.filter-options-retry button').click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(document.querySelector('.item-card'), card);
+  assert.equal(form.elements.search.value, 'тренч');
+  assert.equal(form.elements.color.options[1].value, 'value:red');
+  assert.equal(form.querySelector('.filter-options-retry button').hidden, true);
 });

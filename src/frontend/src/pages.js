@@ -80,14 +80,42 @@ function bindOutfitSearch(ctx) {
   form.elements.sort.onchange = () => ctx.navigate(changedFilter(ctx.route, 'sort', form.elements.sort.value));
 }
 
+function catalogResults(route, page, results) {
+  return `<div class="catalog-update" data-catalog-update role="status"></div><div data-catalog-results>${results}${pagination(route, page)}</div>`;
+}
+
+async function catalogOptions(ctx, path) {
+  try { return await ctx.get(path); }
+  catch { return null; }
+}
+
 export async function wardrobe(ctx) {
-  const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(ctx.route.query)}`), ctx.get('/items/filter-options')]);
-  return { title: 'Мой гардероб', html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${wardrobeFilters(ctx.route, options, page.total)}${page.items.length ? `<div class="cards">${page.items.map(i => itemCard(i)).join('')}</div>` : (activeWardrobeFilters(ctx.route.query).length ? empty('Ничего не найдено', 'Измените условия поиска или нажмите «Сбросить фильтры» выше.') : empty('Гардероб начинается с одной вещи', 'Добавьте любимую одежду, чтобы собирать из неё образы.', link('/items/new', 'Добавить вещь', 'btn')))}${pagination(ctx.route, page)}`, bind: () => bindWardrobeFilters(ctx) };
+  const { route } = ctx;
+  const optionsPath = '/items/filter-options';
+  const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(route.query)}`), catalogOptions(ctx, optionsPath)]);
+  const results = page.items.length ? `<div class="cards">${page.items.map(item => itemCard(item)).join('')}</div>`
+    : activeWardrobeFilters(route.query).length
+      ? empty('Ничего не найдено', 'Измените условия поиска или нажмите «Сбросить фильтры» выше.')
+      : empty('Гардероб начинается с одной вещи', 'Добавьте любимую одежду, чтобы собирать из неё образы.', link('/items/new', 'Добавить вещь', 'btn'));
+  return {
+    title: 'Мой гардероб',
+    html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${wardrobeFilters(route, options, page.total)}${catalogResults(route, page, results)}`,
+    bind: () => bindWardrobeFilters(ctx, optionsPath)
+  };
 }
 
 export async function outfitsPage(ctx) {
-  const page = await ctx.get(`/outfits?${catalogQuery(ctx.route.query)}`);
-  return { title: 'Мои образы', html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${outfitSearch(ctx.route, page)}${page.items.length ? `<div class="outfit-grid">${page.items.map(o => outfitCard(o)).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline')) : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'))}${pagination(ctx.route, page)}`, bind: () => bindOutfitSearch(ctx) };
+  const { route } = ctx;
+  const page = await ctx.get(`/outfits?${catalogQuery(route.query)}`);
+  const results = page.items.length ? `<div class="outfit-grid">${page.items.map(outfit => outfitCard(outfit)).join('')}</div>`
+    : route.query.get('search')
+      ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline'))
+      : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'));
+  return {
+    title: 'Мои образы',
+    html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${outfitSearch(route, page)}${catalogResults(route, page, results)}`,
+    bind: () => bindOutfitSearch(ctx)
+  };
 }
 
 export async function discover(ctx) {
@@ -95,9 +123,10 @@ export async function discover(ctx) {
   if (route.query.get('tab') === 'people') return peoplePage(ctx);
   const itemsTab = route.query.get('tab') === 'items';
   const endpoint = itemsTab ? '/wardrobe' : '/wardrobe/outfits';
+  const optionsPath = `${endpoint}/filter-options`;
   const [data, options] = await Promise.all([
     ctx.get(`${endpoint}?${publicCollectionQuery(route.query)}`),
-    ctx.get(`${endpoint}/filter-options`)
+    catalogOptions(ctx, optionsPath)
   ]);
   const tabs = new URLSearchParams(route.query);
   tabs.delete('tab');
@@ -114,8 +143,8 @@ export async function discover(ctx) {
     title: 'Открытая коллекция',
     html: `<section class="discover-intro"><div><h1>Открытая коллекция</h1><p class="lead">Вещи и образы сообщества Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section>
       <div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link(outfitsPath, 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${tabs}`, 'Вещи', itemsTab ? 'selected' : '')}</nav></div>
-      ${wardrobeFilters(route, options, data.total)}${results}${pagination(route, data)}`,
-    bind: () => bindWardrobeFilters(ctx)
+      ${wardrobeFilters(route, options, data.total)}${catalogResults(route, data, results)}`,
+    bind: () => bindWardrobeFilters(ctx, optionsPath)
   };
 }
 

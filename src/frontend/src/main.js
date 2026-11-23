@@ -89,10 +89,15 @@ async function resolve(ctx) {
 
 async function render() {
   const nextRoute = parseRoute(location.hash);
-  const preserve = renderedRoute?.path === nextRoute.path &&
+  const sameCatalog = renderedRoute?.path === nextRoute.path &&
     ['/wardrobe', '/outfits', '/discover'].includes(nextRoute.path) &&
-    renderedRoute.query.get('tab') === nextRoute.query.get('tab') &&
+    renderedRoute.query.get('tab') === nextRoute.query.get('tab');
+  const preserve = sameCatalog &&
     (nextRoute.query.get('page') === renderedRoute.query.get('page') || (nextRoute.query.get('page') || '1') === '1');
+  const previousForm = sameCatalog && content.querySelector('#wardrobe-filters');
+  const initialValues = previousForm ? new Map(new FormData(previousForm)) : null;
+  const sameFilters = sameCatalog && ['search', 'category', 'color', 'brand', 'size', 'colorMissing', 'brandMissing', 'sizeMissing', 'publication']
+    .every(key => renderedRoute.query.get(key) === nextRoute.query.get(key));
   const scroll = window.scrollY;
   const focusKey = document.activeElement?.closest('[data-filter-focus]')?.dataset.filterFocus;
   const mine = ++version;
@@ -104,8 +109,16 @@ async function render() {
   const signal = controller.signal;
   const isCurrent = () => version === mine && !signal.aborted;
   header(route);
-  content.innerHTML = '<div class="loading" role="status"><span class="spinner"></span>Собираем вашу коллекцию…</div>';
-  content.setAttribute('aria-busy', 'true');
+  const previousResults = sameCatalog && content.querySelector('[data-catalog-results]');
+  const update = previousResults && content.querySelector('[data-catalog-update]');
+  if (update) {
+    update.className = 'catalog-update pending';
+    update.textContent = 'Обновляем результаты…';
+    previousResults.setAttribute('aria-busy', 'true');
+  } else {
+    content.innerHTML = '<div class="loading" role="status"><span class="spinner"></span>Собираем вашу коллекцию…</div>';
+    content.setAttribute('aria-busy', 'true');
+  }
   try {
     if (!authRestored) {
       try { await auth.restore({ signal }); authRestored = true; }
@@ -120,16 +133,35 @@ async function render() {
     const ctx = { route, api, auth, drafts: createDraftSession, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, updateHeader: () => { if (isCurrent()) header(parseRoute(location.hash)); }, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
     const page = await resolve(ctx);
     if (!isCurrent()) return;
-    header(route);
+    const latestValues = previousForm ? new FormData(previousForm) : null;
+    const advancedOpen = previousForm && previousForm.querySelector('details').open;
+    const latestFocus = content.contains(document.activeElement)
+      ? document.activeElement.closest('[data-filter-focus]')?.dataset.filterFocus
+      : focusKey;
     content.innerHTML = page.html;
+    const nextForm = content.querySelector('#wardrobe-filters');
+    if (latestValues && nextForm) {
+      for (const [key, value] of latestValues) {
+        if (key === 'sort' || (!sameFilters && value === initialValues.get(key))) continue;
+        const field = nextForm.elements[key];
+        if (!field) continue;
+        if (field.tagName === 'SELECT' && value && ![...field.options].some(option => option.value === value)) {
+          const selected = previousForm.elements[key].selectedOptions[0];
+          if (!selected) continue;
+          field.add(selected.cloneNode(true));
+        }
+        field.value = value;
+      }
+      if (sameFilters && advancedOpen) nextForm.querySelector('details').open = true;
+    }
     enhanceChoices(content);
     document.title = `${page.title} — Outfitly`;
     cleanup = page.cleanup;
     page.bind?.();
     renderedRoute = route;
-    const filterFocus = preserve && focusKey
+    const filterFocus = preserve && latestFocus
       ? [...content.querySelectorAll('[data-filter-focus]')].find(element =>
-        element.dataset.filterFocus === focusKey && !element.hidden &&
+        element.dataset.filterFocus === latestFocus && !element.hidden &&
         (!element.closest('details:not([open])') || element.matches('details > summary:first-child'))
       ) || content.querySelector('[type="search"]')
       : null;
@@ -138,6 +170,12 @@ async function render() {
     filterFocus?.scrollIntoView?.({ block: 'nearest' });
   } catch (error) {
     if (!isCurrent() || error.name === 'AbortError') return;
+    if (update) {
+      update.className = 'catalog-update failed';
+      update.innerHTML = '<span>Не удалось обновить результаты. Показана предыдущая выдача.</span><button type="button" class="btn outline small">Повторить</button>';
+      update.querySelector('button').onclick = render;
+      return;
+    }
     renderedRoute = null;
     if (error.status === 404) { const page = notFound(route.parts[0] === 'shared'); content.innerHTML = page.html; document.title = `${page.title} — Outfitly`; }
     else {
@@ -148,7 +186,12 @@ async function render() {
     const heading = content.querySelector('h1') || content;
     heading.tabIndex = -1;
     heading.focus();
-  } finally { if (isCurrent()) content.removeAttribute('aria-busy'); }
+  } finally {
+    if (isCurrent()) {
+      content.removeAttribute('aria-busy');
+      previousResults?.removeAttribute?.('aria-busy');
+    }
+  }
 }
 
 function requestLeave(action) {

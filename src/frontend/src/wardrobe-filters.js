@@ -1,5 +1,5 @@
 import { categories, escape } from './components.js';
-import { catalogQuery } from './router.js';
+import { catalogQuery, changedFilter } from './router.js';
 
 const attributes = [['color', 'Цвет', 'colors'], ['brand', 'Бренд', 'brands'], ['size', 'Размер', 'sizes']];
 const filterLabels = {
@@ -42,6 +42,9 @@ function filterPath(route, query) {
   return `${route.path}${query.size ? `?${query}` : ''}`;
 }
 
+const attributeOptions = (values = []) => values.map(value =>
+  value === null ? ['missing', 'Не указан'] : [`value:${value}`, value]);
+
 export function wardrobeFilters(route, options, total) {
   const query = route.query;
   const personal = route.path === '/wardrobe';
@@ -50,12 +53,12 @@ export function wardrobeFilters(route, options, total) {
   const select = (name, label, entries, current) => `<label class="field">${label}<select name="${name}" data-filter-focus="${name}">${entries.map(([value, text]) => `<option value="${escape(value)}" ${value === current ? 'selected' : ''}>${escape(text)}</option>`).join('')}</select></label>`;
   const attribute = (name, label, values) => {
     const selected = query.get(`${name}Missing`) === 'true' ? 'missing' : query.has(name) ? `value:${query.get(name)}` : '';
-    const entries = [['', 'Все'], ...values.map(value => value === null ? ['missing', 'Не указан'] : [`value:${value}`, value])];
+    const entries = [['', 'Все'], ...attributeOptions(values)];
     if (selected && !entries.some(([key]) => key === selected)) entries.push([selected, selected === 'missing' ? 'Не указан' : query.get(name)]);
     return select(name, label, entries, selected);
   };
   const active = activeWardrobeFilters(query, personal);
-  const advanced = active.some(({ key }) => !['search', 'category'].includes(key));
+  const advanced = !options || active.some(({ key }) => !['search', 'category'].includes(key));
   const removable = active.map(({ key, label }) => {
     const remaining = new URLSearchParams(query);
     remaining.delete(key);
@@ -70,17 +73,22 @@ export function wardrobeFilters(route, options, total) {
     ${select('category', outfits ? 'Категория вещи в образе' : 'Категория', [['', 'Все'], ...Object.entries(categories)], query.get('category') || '')}
     <details class="advanced-filters" ${advanced ? 'open' : ''}>
       <summary data-filter-focus="advanced">${outfits ? 'Фильтры по вещи в образе' : 'Дополнительные фильтры'}<span class="filter-toggle" aria-hidden="true"></span></summary>
-      <div class="filter-fields">${attributes.map(([name, label, key]) => attribute(name, label, options[key])).join('')}${personal ? select('publication', 'Публикация', [['all', 'Все'], ['public', 'Опубликованные'], ['private', 'Личные']], query.get('publication') || 'all') : ''}</div>
+      <div class="filter-fields">${attributes.map(([name, label, key]) => attribute(name, label, options?.[key])).join('')}${personal ? select('publication', 'Публикация', [['all', 'Все'], ['public', 'Опубликованные'], ['private', 'Личные']], query.get('publication') || 'all') : ''}</div>
+      ${options ? '' : '<div class="filter-options-retry"><p role="status">Не удалось загрузить варианты цвета, бренда и размера.</p><button class="btn outline small" type="button">Повторить загрузку фильтров</button></div>'}
     </details>
-    <div class="filter-actions"><button class="btn" type="submit" data-filter-focus="submit">Применить</button><a class="btn outline" href="#${escape(resetPath)}" data-filter-focus="reset">Сбросить фильтры</a></div>
-    ${removable ? `<div class="active-filters" role="group" aria-label="Активные фильтры">${removable}</div>` : ''}
-    <div class="catalog-results"><p class="muted" role="status">Найдено: ${total}</p>${select('sort', 'Сортировка', sorts, query.get('sort') || (personal ? 'nameAsc' : 'newest'))}</div>
+    <div class="filter-actions"><button class="btn" type="submit" data-filter-focus="submit">Применить</button><a class="btn outline" href="#${escape(resetPath)}" data-filter-focus="reset" aria-label="Сбросить фильтры">${personal ? 'Сбросить фильтры' : 'Сбросить'}</a></div>
+    <div class="catalog-results">
+      ${removable ? `<div class="active-filters" role="group" aria-label="Активные фильтры">${removable}</div>` : ''}
+      <p class="muted" role="status">Найдено:&nbsp;${total}</p>${select('sort', 'Сортировка', sorts, query.get('sort') || (personal ? 'nameAsc' : 'newest'))}
+    </div>
   </form>`;
 }
-export function bindWardrobeFilters(ctx) {
+export function bindWardrobeFilters(ctx, optionsPath) {
   const form = document.querySelector('#wardrobe-filters');
   const { route } = ctx;
-  if (route.path === '/discover') form.elements.sort.onchange = () => form.requestSubmit();
+  if (route.path === '/discover') {
+    form.elements.sort.onchange = () => ctx.navigate(changedFilter(route, 'sort', form.elements.sort.value));
+  }
   form.onsubmit = event => {
     event.preventDefault();
     const query = new URLSearchParams();
@@ -94,5 +102,38 @@ export function bindWardrobeFilters(ctx) {
       else if (value.startsWith('value:')) query.set(key, value.slice(6));
     }
     ctx.navigate(filterPath(route, query));
+  };
+
+  const retry = form.querySelector('.filter-options-retry');
+  if (!retry) return;
+  const button = retry.querySelector('button');
+  const status = retry.querySelector('[role="status"]');
+  button.onclick = async () => {
+    button.disabled = true;
+    status.textContent = 'Загружаем варианты фильтров…';
+    try {
+      const options = await ctx.get(optionsPath);
+      if (!form.isConnected) return;
+      for (const [name, , key] of attributes) {
+        const field = form.elements[name];
+        for (const [value, label] of attributeOptions(options[key])) {
+          if ([...field.options].some(option => option.value === value)) continue;
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = label;
+          field.add(option);
+        }
+      }
+      if (document.activeElement === button || document.activeElement === document.body) {
+        form.querySelector('.advanced-filters summary').focus();
+      }
+      status.textContent = 'Варианты фильтров загружены.';
+      status.classList.add('sr-only');
+      button.hidden = true;
+    } catch {
+      if (form.isConnected) status.textContent = 'Варианты фильтров всё ещё недоступны. Попробуйте снова.';
+    } finally {
+      if (form.isConnected && !button.hidden) button.disabled = false;
+    }
   };
 }

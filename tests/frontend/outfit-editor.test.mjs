@@ -44,6 +44,8 @@ for (const fails of [false, true]) {
     editor.bind(); await flush();
     document.querySelector('[data-remove="old"]').click();
     document.querySelector('[data-add="first"]').click();
+    assert.equal(document.activeElement.dataset.add, 'late');
+    assert.match(document.querySelector('#jump-to-composition').textContent, /\(1\)/);
     const staleAdd = document.querySelector('[data-add="late"]');
     const staleRemove = document.querySelector('[data-remove="first"]');
     document.querySelector('#editor-search').value = 'linen';
@@ -79,6 +81,7 @@ for (const fails of [false, true]) {
       assert.deepEqual(navigations, []); assert.deepEqual(notifications, []);
       assert.equal(document.querySelector('#form-error').hidden, false);
       document.querySelector('[data-add="late"]').click();
+      assert.equal(document.activeElement.id, 'composition-heading');
       document.querySelector('[data-remove="first"]').click();
       assert.deepEqual([...document.querySelectorAll('[data-remove]')].map(el => el.dataset.remove), ['late']);
     } else {
