@@ -5,12 +5,30 @@ using Outfitly.Api.Endpoints;
 using Outfitly.Api.Errors;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using System.Net;
 using System.Threading.RateLimiting;
 using Outfitly.Application.Authentication;
 using System.Text.Json.Serialization;
 using Outfitly.Api.Contracts;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var knownProxy = builder.Configuration["ReverseProxy:KnownProxy"];
+if (!string.IsNullOrWhiteSpace(knownProxy))
+{
+    if (!IPAddress.TryParse(knownProxy, out var proxyAddress))
+        throw new InvalidOperationException("ReverseProxy:KnownProxy must be a valid IP address.");
+
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = 1;
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Remove(IPAddress.IPv6Loopback);
+        options.KnownProxies.Add(proxyAddress.IsIPv4MappedToIPv6 ? proxyAddress.MapToIPv4() : proxyAddress);
+    });
+}
 
 var connectionString = builder.Configuration.GetConnectionString("Outfitly")
     ?? throw new InvalidOperationException("Configure ConnectionStrings:Outfitly for PostgreSQL.");
@@ -79,6 +97,8 @@ builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 var app = builder.Build();
+if (!string.IsNullOrWhiteSpace(knownProxy))
+    app.UseForwardedHeaders();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.UseHttpsRedirection();
