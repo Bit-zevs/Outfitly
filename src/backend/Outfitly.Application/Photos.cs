@@ -16,6 +16,7 @@ public sealed record ProcessedPhoto(byte[] Content, string Extension);
 public sealed record StoredPhoto(Stream Content, string ContentType);
 public sealed class UnsupportedPhotoException : Exception;
 public sealed class PhotoTooLargeException : Exception;
+public sealed class PhotoProcessingBusyException : Exception;
 public sealed record ShareLinkView(Guid Id, string Token);
 
 // Scoped alongside the database unit of work. File removal never precedes commit.

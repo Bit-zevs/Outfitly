@@ -36,10 +36,10 @@ test('registration sends username and explains a taken username separately from 
   mount(t, authPage({ route: parseRoute('#/register'), isCurrent: () => true,
     auth: { async register(...args) { input = args; throw new ApiError(409, { code: 'username_taken' }); } } }, true));
   const form = document.querySelector('form');
-  Object.entries({ displayName: 'Анна', username: '@anna', email: 'anna@example.com', password: 'long password', passwordConfirmation: 'long password' })
+  Object.entries({ displayName: 'Анна', username: '@anna', email: 'anna@example.com' })
     .forEach(([name, value]) => { form.elements[name].value = value; });
   await form.onsubmit({ preventDefault });
-  assert.equal(input[4], '@anna');
+  assert.equal(input[2], '@anna');
   assert.match(document.querySelector('#form-error').textContent, /@username уже занят/);
   assert.equal(form.elements.username.value, '@anna');
 });

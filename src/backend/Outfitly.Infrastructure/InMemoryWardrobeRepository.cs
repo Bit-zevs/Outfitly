@@ -15,8 +15,11 @@ public sealed class InMemoryWardrobeRepository : IWardrobeRepository
 
     public ShareLink? FindActiveLink(string token, ShareTargetType targetType) =>
         _links.SingleOrDefault(link => link.Token == token && link.TargetType == targetType && link.IsActive);
-    public WardrobeItem? ReadItem(Guid id) => _items.SingleOrDefault(item => item.Id == id);
-    public Outfit? ReadOutfit(Guid id) => _outfits.SingleOrDefault(outfit => outfit.Id == id);
+    public WardrobeItem? ReadItem(Guid id, bool publicOnly = false) =>
+        _items.SingleOrDefault(item => item.Id == id && (!publicOnly || item.IsPublic));
+    public Outfit? ReadOutfit(Guid id, bool publicOnly = false) =>
+        _outfits.SingleOrDefault(outfit => outfit.Id == id && (!publicOnly || outfit.IsPublic));
+    public Outfit? FindOutfitForChange(Guid id) => ReadOutfit(id);
     public IReadOnlyCollection<WardrobeItem> ReadItems(IReadOnlyCollection<Guid> ids) =>
         _items.Where(item => ids.Contains(item.Id)).ToArray();
 

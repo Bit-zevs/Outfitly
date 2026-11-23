@@ -4,6 +4,7 @@ namespace Outfitly.Application;
 public interface IPostInteractionStore
 {
     IQueryable<PostInteraction> Interactions { get; }
+    IQueryable<PostInteraction> ReadInteractions { get; }
     User FindUser(Guid id);
     void Add(PostInteraction interaction);
     void Remove(PostInteraction interaction);
@@ -17,30 +18,34 @@ public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractio
     private Guid Access(Guid id, bool outfit, Guid? actor, string? token, bool changing, Guid? publicOutfitId)
     {
         Guid owner; bool published;
+        var publicOnly = actor is null && token is null && (outfit || publicOutfitId is null);
+        Outfit? trackedOutfit = null;
         if (outfit)
         {
-            var target = wardrobe.GetOutfits().SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException();
+            if (changing) trackedOutfit = wardrobe.FindOutfitForChange(id) ?? throw new KeyNotFoundException();
+            var target = trackedOutfit ?? wardrobe.ReadOutfit(id, publicOnly) ?? throw new KeyNotFoundException();
             owner = target.OwnerId; published = target.IsPublic;
-            if (changing) wardrobe.MarkOutfitChanged(target);
         }
         else
         {
-            var target = wardrobe.GetAll().SingleOrDefault(x => x.Id == id) ?? throw new KeyNotFoundException();
+            var target = wardrobe.ReadItem(id, publicOnly) ?? throw new KeyNotFoundException();
             owner = target.OwnerId; published = target.IsPublic;
         }
-        if (!published && owner != actor && !wardrobe.GetLinks().Any(x => x.IsActive && x.Token == token && x.TargetId == id &&
-            x.TargetType == (outfit ? ShareTargetType.Outfit : ShareTargetType.WardrobeItem)))
+        var type = outfit ? ShareTargetType.Outfit : ShareTargetType.WardrobeItem;
+        if (!published && owner != actor && (token is null || wardrobe.FindActiveLink(token, type)?.TargetId != id))
         {
             if (outfit) throw new KeyNotFoundException();
             PublicOutfitItem.Require(wardrobe, publicOutfitId, id, changing);
         }
+        if (trackedOutfit is not null) wardrobe.MarkOutfitChanged(trackedOutfit);
         return owner;
     }
-    private IQueryable<PostInteraction> Rows(Guid id, bool outfit) => store.Interactions.Where(x => outfit ? x.OutfitId == id : x.ItemId == id);
+    private IQueryable<PostInteraction> Rows(Guid id, bool outfit, bool readOnly = false) =>
+        (readOnly ? store.ReadInteractions : store.Interactions).Where(x => outfit ? x.OutfitId == id : x.ItemId == id);
     public EngagementView Read(Guid id, bool outfit, Guid? actor, string? token, Guid? publicOutfitId = null)
     {
         Access(id, outfit, actor, token, false, publicOutfitId);
-        var rows = Rows(id, outfit);
+        var rows = Rows(id, outfit, readOnly: true);
         return new(rows.Count(x => x.Kind == "view"), rows.Count(x => x.Kind == "like"),
             rows.Count(x => x.Kind == "comment" && !x.IsDeleted), actor.HasValue && rows.Any(x => x.Kind == "like" && x.UserId == actor), actor.HasValue);
     }
@@ -56,7 +61,7 @@ public sealed class PostEngagement(IWardrobeRepository wardrobe, IPostInteractio
     {
         var owner = Access(id, outfit, actor, token, false, publicOutfitId);
         PublicProfiles.ValidatePage(page, 20);
-        var rows = Rows(id, outfit).Where(x => x.Kind == "comment" && x.ParentId == parent);
+        var rows = Rows(id, outfit, readOnly: true).Where(x => x.Kind == "comment" && x.ParentId == parent);
         var total = rows.Count();
         var result = rows.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id).Skip((page - 1) * 20).Take(20).ToArray()
             .Select(x => View(x, actor, owner)).ToArray();

@@ -17,14 +17,20 @@ function mount(t, page) {
   page.bind();
 }
 
+function fillPassword(form) {
+  form.elements.password.value = form.elements.passwordConfirmation.value = 'new long password';
+}
+
 test('opening confirmation link sends nothing; explicit submission confirms and removes token', async t => {
   const calls = [], navigations = [];
   const ctx = { route: parseRoute('#/confirm-email?token=secret-token'), isCurrent: () => true,
-    auth: { async confirmEmail(token) { calls.push(token); } }, navigate: (...args) => navigations.push(args) };
+    auth: { async confirmEmail(...args) { calls.push(args); } }, navigate: (...args) => navigations.push(args) };
   mount(t, confirmEmailPage(ctx));
   assert.deepEqual(calls, []);
-  await document.querySelector('form').onsubmit({ preventDefault() {} });
-  assert.deepEqual(calls, ['secret-token']);
+  const form = document.querySelector('form');
+  fillPassword(form);
+  await form.onsubmit({ preventDefault() {} });
+  assert.deepEqual(calls, [['secret-token', 'new long password', 'new long password']]);
   assert.deepEqual(navigations, [['/confirm-email?confirmed=1', true]]);
 });
 
@@ -32,18 +38,20 @@ for (const status of [400, 409, 429, 503]) {
   test(`confirmation failure ${status} leaves a retry and a new-letter link`, async t => {
     mount(t, confirmEmailPage({ route: parseRoute('#/confirm-email?token=expired'), isCurrent: () => true,
       auth: { async confirmEmail() { throw new ApiError(status, status === 400 ? { code: 'invalid_confirmation_token' } : {}); } } }));
-    await document.querySelector('form').onsubmit({ preventDefault() {} });
+    const form = document.querySelector('form');
+    fillPassword(form);
+    await form.onsubmit({ preventDefault() {} });
     assert.ok(document.querySelector('#confirmation-status').textContent.length > 20);
     assert.equal(document.querySelector('button').disabled, false);
     assert.ok(document.querySelector('a[href="#/check-email"]'));
   });
 }
 
-test('resend failure and rate limit are explained; registration SMTP failure preserves account screen', async t => {
+test('confirmation instructions are generic and resend transport failures are explained', async t => {
   let status = 429;
   mount(t, checkEmailPage({ route: parseRoute('#/check-email?email=a%40example.com&sent=0'), isCurrent: () => true,
     auth: { async resendConfirmation(email) { assert.equal(email, 'a@example.com'); if (status) throw new ApiError(status); } } }));
-  assert.match(document.querySelector('.lead').textContent, /Аккаунт создан/);
+  assert.match(document.querySelector('.lead').textContent, /Если адрес ожидает подтверждения/);
   const form = document.querySelector('form');
   await form.onsubmit({ preventDefault() {} });
   assert.match(document.querySelector('#email-status').textContent, /минуту/);
@@ -53,30 +61,27 @@ test('resend failure and rate limit are explained; registration SMTP failure pre
   assert.match(document.querySelector('#email-status').textContent, /письмо отправлено/);
 });
 
-test('registration navigates to delivery status; unconfirmed login offers resend', async t => {
+test('registration requests only profile and email, then shows generic instructions', async t => {
   const routes = [];
+  const requests = [];
   const ctx = { route: parseRoute('#/register'), isCurrent: () => true, navigate: route => routes.push(route),
-    auth: { async register() { return { confirmationEmailSent: false }; }, async login() { throw new ApiError(403, { code: 'email_not_confirmed' }); } } };
+    auth: { async register(...args) { requests.push(args); } } };
   mount(t, authPage(ctx, true));
   const form = document.querySelector('form');
   form.elements.displayName.value = 'Alice'; form.elements.email.value = 'a@example.com';
-  form.elements.password.value = form.elements.passwordConfirmation.value = 'long password';
+  form.elements.username.value = 'alice';
+  assert.equal(form.elements.password, undefined);
   await form.onsubmit({ preventDefault() {} });
-  assert.equal(routes[0], '/check-email?email=a%40example.com&sent=0');
-  document.querySelector('main').innerHTML = authPage(ctx, false).html;
-  authPage(ctx, false).bind();
-  const login = document.querySelector('form');
-  login.elements.email.value = 'a@example.com'; login.elements.password.value = 'long password';
-  await login.onsubmit({ preventDefault() {} });
-  assert.equal(routes[1], '/check-email?email=a%40example.com');
+  assert.deepEqual(requests, [['Alice', 'a@example.com', 'alice']]);
+  assert.deepEqual(routes, ['/check-email?email=a%40example.com']);
 });
 
 test('auth confirmation and resend use anonymous POST bodies without creating local session', async () => {
   const calls = [];
   const auth = createAuth({ async request(...args) { calls.push(args); } });
-  await auth.confirmEmail('token'); await auth.resendConfirmation('a@example.com');
+  await auth.confirmEmail('token', 'new long password', 'new long password'); await auth.resendConfirmation('a@example.com');
   assert.deepEqual(calls, [
-    ['/auth/confirm-email', { method: 'POST', body: { token: 'token' }, anonymous: true }],
+    ['/auth/confirm-email', { method: 'POST', body: { token: 'token', password: 'new long password' }, anonymous: true }],
     ['/auth/resend-confirmation', { method: 'POST', body: { email: 'a@example.com' }, anonymous: true }],
   ]);
   assert.equal(auth.user, null);

@@ -6,7 +6,23 @@ namespace Outfitly.Infrastructure.Photos;
 
 public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
 {
-    public ProcessedPhoto Process(byte[] content, string contentType)
+    private const int MaxOutputSide = 2048;
+    private static readonly SemaphoreSlim ProcessingSlots = new(2);
+
+    public ProcessedPhoto Process(byte[] content, string contentType) =>
+        ProcessLimited(content, contentType, null);
+
+    public ProcessedPhoto ProcessAvatar(byte[] content, string contentType, AvatarCrop crop) =>
+        ProcessLimited(content, contentType, crop);
+
+    private static ProcessedPhoto ProcessLimited(byte[] content, string contentType, AvatarCrop? crop)
+    {
+        if (!ProcessingSlots.Wait(0)) throw new PhotoProcessingBusyException();
+        try { return ProcessImage(content, contentType, crop); }
+        finally { ProcessingSlots.Release(); }
+    }
+
+    private static ProcessedPhoto ProcessImage(byte[] content, string contentType, AvatarCrop? crop)
     {
         contentType = contentType.ToLowerInvariant();
         if (contentType is not ("image/jpeg" or "image/png" or "image/webp")) throw new UnsupportedPhotoException();
@@ -27,9 +43,24 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
         // Apply EXIF orientation before encoding; do not copy EXIF or other input metadata.
         var origin = codec.EncodedOrigin;
         var swapsAxes = origin is SKEncodedOrigin.LeftTop or SKEncodedOrigin.RightTop or SKEncodedOrigin.RightBottom or SKEncodedOrigin.LeftBottom;
-        using var oriented = new SKBitmap(swapsAxes ? info.Height : info.Width, swapsAxes ? info.Width : info.Height);
+        var width = swapsAxes ? info.Height : info.Width;
+        var height = swapsAxes ? info.Width : info.Height;
+        if (crop is { } area && (area.X < 0 || area.Y < 0 || area.Size <= 0 ||
+            (long)area.X + area.Size > width || (long)area.Y + area.Size > height))
+            throw new ArgumentException("Crop must be a square within the oriented image.");
+        var scale = Math.Min(1d, (double)MaxOutputSide / Math.Max(width, height));
+        var targetWidth = crop is null ? Math.Max(1, (int)Math.Round(width * scale)) : 512;
+        var targetHeight = crop is null ? Math.Max(1, (int)Math.Round(height * scale)) : 512;
+        using var oriented = new SKBitmap(targetWidth, targetHeight);
         using (var canvas = new SKCanvas(oriented))
         {
+            if (crop is { } square)
+            {
+                canvas.Scale(512f / square.Size);
+                canvas.Translate(-square.X, -square.Y);
+            }
+            else
+                canvas.Scale((float)targetWidth / width, (float)targetHeight / height);
             switch (origin)
             {
                 case SKEncodedOrigin.TopRight: canvas.Translate(info.Width, 0); canvas.Scale(-1, 1); break;
@@ -40,29 +71,14 @@ public sealed class SkiaPhotoProcessor : IPhotoProcessor, IAvatarProcessor
                 case SKEncodedOrigin.RightBottom: canvas.Translate(info.Height, info.Width); canvas.RotateDegrees(90); canvas.Scale(-1, 1); break;
                 case SKEncodedOrigin.LeftBottom: canvas.Translate(0, info.Width); canvas.RotateDegrees(270); break;
             }
-            canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions());
+            canvas.DrawBitmap(bitmap, 0, 0, new SKSamplingOptions(SKFilterMode.Linear));
         }
+        var format = crop is not null || expected == SKEncodedImageFormat.Png ? SKEncodedImageFormat.Png : SKEncodedImageFormat.Jpeg;
         using var image = SKImage.FromBitmap(oriented);
-        using var encoded = image.Encode(expected == SKEncodedImageFormat.Webp ? SKEncodedImageFormat.Jpeg : expected, 90);
-        return new(encoded.ToArray(), expected == SKEncodedImageFormat.Png ? ".png" : ".jpg");
-    }
-
-    public ProcessedPhoto ProcessAvatar(byte[] content, string contentType, AvatarCrop crop)
-    {
-        var normalized = Process(content, contentType);
-        using var bitmap = SKBitmap.Decode(normalized.Content);
-        if (crop.X < 0 || crop.Y < 0 || crop.Size <= 0 || (long)crop.X + crop.Size > bitmap.Width || (long)crop.Y + crop.Size > bitmap.Height)
-            throw new ArgumentException("Crop must be a square within the oriented image.");
-        using var result = new SKBitmap(512, 512);
-        using (var canvas = new SKCanvas(result))
-        {
-            canvas.Clear(SKColors.Transparent);
-            canvas.DrawBitmap(bitmap, new SKRect(crop.X, crop.Y, crop.X + crop.Size, crop.Y + crop.Size),
-                new SKRect(0, 0, 512, 512), new SKSamplingOptions(SKFilterMode.Linear));
-        }
-        using var image = SKImage.FromBitmap(result);
-        using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
-        return new(encoded.ToArray(), ".png");
+        using var encoded = image.Encode(format, 90);
+        if (encoded is null) throw new ArgumentException("Unable to encode image.");
+        if (encoded.Size > PhotoService.MaxBytes) throw new PhotoTooLargeException();
+        return new(encoded.ToArray(), format == SKEncodedImageFormat.Png ? ".png" : ".jpg");
     }
 
     private static void ValidatePngChunks(byte[] content)

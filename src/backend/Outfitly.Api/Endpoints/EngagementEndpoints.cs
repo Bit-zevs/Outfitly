@@ -11,9 +11,9 @@ public static class EngagementEndpoints
             var outfit = kind == "outfits";
             var group = app.MapGroup($"/api/{kind}/{{id:guid}}");
             group.MapGet("/engagement", (Guid id, string? shareToken, Guid? publicOutfitId, HttpContext http, PostEngagement service) =>
-                service.Read(id, outfit, Actor(http), shareToken, publicOutfitId));
+                service.Read(id, outfit, Actor(http), shareToken, publicOutfitId)).RequireRateLimiting("public-media-read");
             group.MapGet("/comments", (Guid id, string? shareToken, Guid? publicOutfitId, Guid? parentId, int? page, HttpContext http, PostEngagement service) =>
-                service.Comments(id, outfit, Actor(http), shareToken, parentId, page ?? 1, publicOutfitId));
+                service.Comments(id, outfit, Actor(http), shareToken, parentId, page ?? 1, publicOutfitId)).RequireRateLimiting("public-media-read");
             group.MapPost("/views", (Guid id, string? shareToken, Guid? publicOutfitId, HttpContext http, PostEngagement service) => {
                 service.React(id, outfit, CurrentActor.Id(http.User), shareToken, "view", publicOutfitId: publicOutfitId); return Results.NoContent();
             }).RequireAuthorization(CurrentActor.PolicyName).AddEndpointFilter<CommitChangesFilter>();

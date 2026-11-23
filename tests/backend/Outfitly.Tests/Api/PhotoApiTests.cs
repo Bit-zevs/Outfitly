@@ -255,7 +255,7 @@ public sealed class PhotoApiTests
     }
 
     [Fact]
-    public async Task Concurrent_HTTP_upload_returns_409_and_removes_only_the_losing_file()
+    public async Task Concurrent_upload_for_the_same_account_is_rejected_and_can_be_retried()
     {
         var beforeCommit = new BeforeCommit();
         using var factory = new ApiFactory(configureDatabase: options => options.AddInterceptors(beforeCommit));
@@ -267,9 +267,12 @@ public sealed class PhotoApiTests
         beforeCommit.Action = async () =>
         {
             using var otherClient = await factory.OwnerClientAsync(owner);
-            (await Upload(otherClient, id, Image(SKEncodedImageFormat.Jpeg), "image/jpeg")).EnsureSuccessStatusCode();
+            Assert.Equal(HttpStatusCode.TooManyRequests,
+                (await Upload(otherClient, id, Image(SKEncodedImageFormat.Jpeg), "image/jpeg")).StatusCode);
         };
-        Assert.Equal(HttpStatusCode.Conflict, (await Upload(client, id)).StatusCode);
+        (await Upload(client, id)).EnsureSuccessStatusCode();
+        Assert.EndsWith(".png", Assert.Single(Directory.GetFiles(factory.PhotoRoot)));
+        (await Upload(client, id, Image(SKEncodedImageFormat.Jpeg), "image/jpeg")).EnsureSuccessStatusCode();
         var winningFile = Assert.Single(Directory.GetFiles(factory.PhotoRoot));
         Assert.EndsWith(".jpg", winningFile);
         var photo = await client.GetAsync($"/api/items/{id}/photo");

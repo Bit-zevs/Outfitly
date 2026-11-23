@@ -17,11 +17,14 @@ public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeR
         context.ShareLinks.AsNoTracking().SingleOrDefault(link =>
             link.Token == token && link.TargetType == targetType && link.IsActive);
 
-    public WardrobeItem? ReadItem(Guid id) =>
-        context.WardrobeItems.AsNoTracking().SingleOrDefault(item => item.Id == id);
+    public WardrobeItem? ReadItem(Guid id, bool publicOnly = false) =>
+        context.WardrobeItems.AsNoTracking().SingleOrDefault(item => item.Id == id && (!publicOnly || item.IsPublic));
 
-    public Outfit? ReadOutfit(Guid id) =>
-        context.Outfits.AsNoTracking().SingleOrDefault(outfit => outfit.Id == id);
+    public Outfit? ReadOutfit(Guid id, bool publicOnly = false) =>
+        context.Outfits.AsNoTracking().SingleOrDefault(outfit => outfit.Id == id && (!publicOnly || outfit.IsPublic));
+
+    public Outfit? FindOutfitForChange(Guid id) =>
+        context.Outfits.AsTracking().SingleOrDefault(outfit => outfit.Id == id);
 
     public IReadOnlyCollection<WardrobeItem> ReadItems(IReadOnlyCollection<Guid> ids) =>
         context.WardrobeItems.AsNoTracking().Where(item => ids.Contains(item.Id)).ToArray();

@@ -20,9 +20,7 @@ public sealed class UsernameApiTests
         await ApiFactory.SetCsrfAsync(client);
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         { email = "anna@example.com", password = "a long password", displayName = "Анна", username = " @Anna " });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var account = (await response.Content.ReadFromJsonAsync<AccountView>())!;
-        Assert.Equal("anna", account.Username);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/auth/register", new
         { email = "other@example.com", password = "a long password", displayName = "Other", username = "ANNA" })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", new
@@ -30,8 +28,9 @@ public sealed class UsernameApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", new
         { email = "other@example.com", password = "a long password", displayName = "Other", username = "1invalid" })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PatchAsJsonAsync("/api/auth/me/username", new { username = "new_anna" })).StatusCode);
-        await factory.ConfirmEmailAsync(client, "anna@example.com");
+        await factory.ConfirmEmailAsync(client, "anna@example.com", "a long password");
         (await client.PostAsJsonAsync("/api/auth/login", new { email = "anna@example.com", password = "a long password" })).EnsureSuccessStatusCode();
+        Assert.Equal("anna", (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!.Username);
         client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PatchAsJsonAsync("/api/auth/me/username", new { username = "new_anna" })).StatusCode);
         await ApiFactory.SetCsrfAsync(client);

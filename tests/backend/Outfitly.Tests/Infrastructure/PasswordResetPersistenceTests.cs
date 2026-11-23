@@ -15,9 +15,9 @@ public sealed class PasswordResetPersistenceTests
     {
         await using var db = open();
         var service = Service(db, clock);
-        var registered = await service.RegisterAsync(Email, Password, "Reset", "reset");
+        var registered = await service.RegisterAsync(Email, "Reset", "reset");
         await db.SaveChangesAsync();
-        await service.ConfirmEmailAsync(registered.Confirmation.Token);
+        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password);
         await db.SaveChangesAsync();
         var email = await service.RequestPasswordResetAsync(Email);
         await db.SaveChangesAsync();
@@ -25,27 +25,29 @@ public sealed class PasswordResetPersistenceTests
     }
 
     [Fact]
-    public async Task Replacement_invalidates_old_token_and_expiry_is_exactly_one_hour()
+    public async Task Repeated_request_preserves_original_link_until_it_expires()
     {
         await using var database = await TestDatabase.CreateAsync();
         var clock = new Clock();
         var original = await Seed(database.Open, clock);
         clock.Now = clock.Now.AddMinutes(1);
-        string replacement;
-        await using (var issue = database.Open())
-        {
-            replacement = (await Service(issue, clock).RequestPasswordResetAsync(Email))!.Token;
-            await issue.SaveChangesAsync();
-        }
         await using (var check = database.Open())
         {
-            await Assert.ThrowsAsync<InvalidPasswordResetTokenException>(() => Service(check, clock).ResetPasswordAsync(original, "new password"));
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(check, clock).ConfirmEmailAsync(replacement));
+            var service = Service(check, clock);
+            Assert.Null(await service.RequestPasswordResetAsync(Email));
+            await service.ResetPasswordAsync(original, "new password");
         }
-        clock.Now = clock.Now.AddHours(1);
-        await using var expired = database.Open();
-        await Assert.ThrowsAsync<InvalidPasswordResetTokenException>(() => Service(expired, clock).ResetPasswordAsync(replacement, "new password"));
-        Assert.NotNull(await Service(expired, clock).LoginAsync(Email, Password));
+        clock.Now = clock.Now.AddMinutes(59);
+        await using (var issue = database.Open())
+        {
+            var service = Service(issue, clock);
+            await Assert.ThrowsAsync<InvalidPasswordResetTokenException>(() => service.ResetPasswordAsync(original, "new password"));
+            var replacement = await service.RequestPasswordResetAsync(Email);
+            Assert.NotNull(replacement);
+            Assert.NotEqual(original, replacement.Token);
+            await issue.SaveChangesAsync();
+            await service.ResetPasswordAsync(replacement.Token, "new password");
+        }
     }
 
     [Theory]

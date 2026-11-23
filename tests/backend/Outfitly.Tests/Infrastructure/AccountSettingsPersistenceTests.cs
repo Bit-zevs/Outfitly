@@ -16,9 +16,9 @@ public sealed class AccountSettingsPersistenceTests
     {
         await using var db = open();
         var service = Service(db, clock);
-        var registered = await service.RegisterAsync(OldEmail, Password, "Original", "original");
+        var registered = await service.RegisterAsync(OldEmail, "Original", "original");
         await db.SaveChangesAsync();
-        await service.ConfirmEmailAsync(registered.Confirmation.Token);
+        await service.ConfirmEmailAsync(registered.Confirmation.Token, Password);
         await db.SaveChangesAsync();
         await service.LoginAsync(OldEmail, Password);
         await db.SaveChangesAsync();
@@ -49,7 +49,7 @@ public sealed class AccountSettingsPersistenceTests
             Assert.Equal(64, account.EmailChangeTokenHash!.Length);
             Assert.DoesNotContain(await read.LoginSessions.ToArrayAsync(), session => session.IsRevoked);
             await Assert.ThrowsAsync<ConfirmationTooFrequentException>(() => Service(read, clock).RequestEmailChangeAsync(id, NewEmail, Password));
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(original));
+            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(original, Password));
             await Assert.ThrowsAsync<InvalidPasswordResetTokenException>(() => Service(read, clock).ResetPasswordAsync(original, "replacement password"));
         }
         clock.Now = clock.Now.AddSeconds(60);
@@ -147,7 +147,7 @@ public sealed class AccountSettingsPersistenceTests
         var id = await Seed(database.Open);
         await using (var seed = database.Open())
         {
-            await Service(seed).RegisterAsync("other@example.com", Password, "Other", "occupied");
+            await Service(seed).RegisterAsync("other@example.com", "Other", "occupied");
             await seed.SaveChangesAsync();
         }
         await using (var change = database.Open())

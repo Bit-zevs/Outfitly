@@ -43,9 +43,9 @@ public sealed class PostgreSqlAccountSettingsTests
         string firstToken, secondToken;
         await using (var seed = database.Open())
         {
-            var second = await Service(seed).RegisterAsync("other@example.com", Password, "Other", "other");
+            var second = await Service(seed).RegisterAsync("other@example.com", "Other", "other");
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token);
+            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token, Password);
             await seed.SaveChangesAsync();
             secondId = second.Id;
             await Service(seed).LoginAsync(second.Email, Password);

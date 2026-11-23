@@ -42,7 +42,8 @@ public static class WorkspaceEndpoints
             if (form.Count != 0 || form.Files.Count != 1 || form.Files[0].Name != "file") throw new ArgumentException("Expected one file field.");
             var file = form.Files[0]; if (file.Length > PhotoService.MaxBytes) throw new PhotoTooLargeException();
             await using var stream = file.OpenReadStream(); return await s.UploadAsync(CurrentActor.Id(h.User), id, version, stream, file.ContentType, ct);
-        }).WithMetadata(new RequestSizeLimitAttribute(PhotoService.MaxBytes + 1024 * 1024)).AddEndpointFilter<CommitChangesFilter>();
+        }).WithMetadata(new RequestSizeLimitAttribute(PhotoService.MaxBytes + 1024 * 1024))
+            .RequireRateLimiting("photo-upload").AddEndpointFilter<CommitChangesFilter>();
         group.MapDelete("/drafts/{id:guid}/photo", (Guid id, Guid version, HttpContext h, WorkspaceService s) => s.RemovePhoto(CurrentActor.Id(h.User), id, version)).AddEndpointFilter<CommitChangesFilter>();
     }
 }

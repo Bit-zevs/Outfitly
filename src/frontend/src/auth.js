@@ -19,10 +19,8 @@ export function createAuth(api) {
       api.resetCsrf();
       return user;
     },
-    async register(displayName, email, password, confirmation, username) {
-      const mismatch = passwordConfirmationError(password, confirmation);
-      if (mismatch) throw new ApiError(400, { detail: mismatch });
-      return api.request('/auth/register', { method: 'POST', body: { displayName, email, password, username }, anonymous: true });
+    register(displayName, email, username) {
+      return api.request('/auth/register', { method: 'POST', body: { displayName, email, username }, anonymous: true });
     },
     async changeUsername(username) {
       user = await api.request('/auth/me/username', { method: 'PATCH', body: { username } });
@@ -67,8 +65,10 @@ export function createAuth(api) {
       user = null;
       api.resetCsrf();
     },
-    confirmEmail(token) {
-      return api.request('/auth/confirm-email', { method: 'POST', body: { token }, anonymous: true });
+    confirmEmail(token, password, confirmation) {
+      const mismatch = passwordConfirmationError(password, confirmation);
+      if (mismatch) return Promise.reject(new ApiError(400, { detail: mismatch }));
+      return api.request('/auth/confirm-email', { method: 'POST', body: { token, password }, anonymous: true });
     },
     forgotPassword(email) {
       return api.request('/auth/forgot-password', { method: 'POST', body: { email }, anonymous: true });

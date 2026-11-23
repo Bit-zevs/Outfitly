@@ -15,8 +15,8 @@ public sealed class PasswordResetApiTests
     private static async Task Register(HttpClient client, ApiFactory factory)
     {
         await ApiFactory.SetCsrfAsync(client);
-        Assert.Equal(HttpStatusCode.Created, (await client.PostAsJsonAsync("/api/auth/register", new { email = Email, password = Password, displayName = "Reset", username = "reset" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { factory.Mail.Emails[Email].Token })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/register", new { email = Email, displayName = "Reset", username = "reset" })).StatusCode);
+        await factory.ConfirmEmailAsync(client, Email, Password);
     }
 
     [Fact]

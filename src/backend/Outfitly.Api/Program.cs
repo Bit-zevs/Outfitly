@@ -6,6 +6,7 @@ using Outfitly.Api.Errors;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Net;
 using System.Threading.RateLimiting;
 using Outfitly.Application.Authentication;
@@ -50,6 +51,9 @@ var emailOptions = new Outfitly.Infrastructure.Authentication.SmtpConfirmationOp
 builder.Configuration.GetSection("EmailConfirmation").Bind(emailOptions);
 builder.Services.AddSingleton(emailOptions);
 builder.Services.AddScoped<IConfirmationEmailSender, Outfitly.Infrastructure.Authentication.SmtpConfirmationEmailSender>();
+builder.Services.AddSingleton<AnonymousAccountMail>();
+builder.Services.AddSingleton<IAnonymousAccountMail>(provider => provider.GetRequiredService<AnonymousAccountMail>());
+builder.Services.AddHostedService(provider => provider.GetRequiredService<AnonymousAccountMail>());
 builder.Services.AddScoped<SessionCookieEvents>();
 builder.Services.AddDataProtection().SetApplicationName("Outfitly");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
@@ -74,17 +78,30 @@ builder.Services.AddAntiforgery(options =>
 });
 builder.Services.AddRateLimiter(options =>
 {
+    static bool IsPhotoUpload(HttpContext context) =>
+        context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName == "photo-upload";
+
+    options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+        PartitionedRateLimiter.Create<HttpContext, string>(context => IsPhotoUpload(context)
+            ? RateLimitPartition.GetConcurrencyLimiter("photo-uploads", _ => new ConcurrencyLimiterOptions { PermitLimit = 4, QueueLimit = 0 })
+            : RateLimitPartition.GetNoLimiter("other")),
+        PartitionedRateLimiter.Create<HttpContext, string>(context => IsPhotoUpload(context)
+            ? RateLimitPartition.GetConcurrencyLimiter("actor:" + CurrentActor.Id(context.User), _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 })
+            : RateLimitPartition.GetNoLimiter("other")));
     options.AddPolicy("account-access", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         {
             PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
         }));
-    foreach (var limit in new[] { (Name: "support-create", Count: 5), (Name: "support-messages", Count: 30) })
+    options.AddPolicy("public-media-read", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 240, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    foreach (var limit in new[] { (Name: "support-create", Count: 5), (Name: "support-messages", Count: 30), (Name: "photo-upload", Count: 60) })
         options.AddPolicy(limit.Name, context => RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions
             { PermitLimit = limit.Count, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));
     options.OnRejected = async (context, _) =>
-        await Results.Problem(statusCode: 429, title: "Too many account requests").ExecuteAsync(context.HttpContext);
+        await Results.Problem(statusCode: 429, title: "Too many requests").ExecuteAsync(context.HttpContext);
 });
 builder.Services.AddAuthorization(options => options.AddPolicy(CurrentActor.PolicyName,
     policy => policy.RequireAuthenticatedUser().RequireAssertion(context => CurrentActor.HasValidId(context.User))));

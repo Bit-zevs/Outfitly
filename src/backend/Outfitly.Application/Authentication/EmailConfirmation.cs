@@ -9,7 +9,6 @@ public interface IConfirmationEmailSender
     Task SendAsync(ConfirmationEmail email, CancellationToken cancellationToken);
 }
 
-public sealed class EmailNotConfirmedException : Exception;
 public sealed class InvalidConfirmationTokenException : Exception;
 public sealed class InvalidPasswordResetTokenException : Exception;
 public sealed class ConfirmationTooFrequentException : Exception;

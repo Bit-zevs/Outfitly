@@ -24,16 +24,17 @@ public sealed class AuthenticationApiTests
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         var response = await Register(client, "  Alice@example.com  ");
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.False(HasAuthCookie(response));
-        var user = await response.Content.ReadFromJsonAsync<AccountView>();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
+        var duplicate = await Register(client, "alice@EXAMPLE.COM");
+        Assert.Equal(HttpStatusCode.Accepted, duplicate.StatusCode);
+        Assert.Equal(await response.Content.ReadAsStringAsync(), await duplicate.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.OK, (await Login(factory, client, "ALICE@example.com")).StatusCode);
+        var user = await client.GetFromJsonAsync<AccountView>("/api/auth/me");
         Assert.NotNull(user);
         Assert.Equal("Alice@example.com", user.Email);
         Assert.Equal("Alice", user.DisplayName);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.Conflict, (await Register(client, "alice@EXAMPLE.COM")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await Login(factory, client, "ALICE@example.com")).StatusCode);
-        Assert.Equal(user, await client.GetFromJsonAsync<AccountView>("/api/auth/me"));
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -114,7 +115,7 @@ public sealed class AuthenticationApiTests
         var aliceCookie = AuthCookieHeader(aliceLogin);
         await ApiFactory.SetCsrfAsync(browser);
 
-        await factory.ConfirmEmailAsync(other, "bob@example.com");
+        await factory.ConfirmEmailAsync(other, "bob@example.com", Password);
         var switched = await browser.PostAsJsonAsync("/api/auth/login",
             new { email = "bob@example.com", password = Password });
 
@@ -239,7 +240,7 @@ public sealed class AuthenticationApiTests
     [InlineData(8)]
     [InlineData(14)]
     [InlineData(128)]
-    public async Task Registration_accepts_passwords_from_eight_characters_and_allows_login(int length)
+    public async Task Confirmation_accepts_passwords_from_eight_characters_and_allows_login(int length)
     {
         using var factory = new ApiFactory(testAuthentication: false);
         await factory.InitializeDatabaseAsync();
@@ -247,8 +248,9 @@ public sealed class AuthenticationApiTests
         var password = new string('x', length);
         await ApiFactory.SetCsrfAsync(client);
         var registration = await client.PostAsJsonAsync("/api/auth/register",
-            new { email = "short@example.com", password, displayName = "Alice", username = "alice" });
-        Assert.Equal(HttpStatusCode.Created, registration.StatusCode);
+            new { email = "short@example.com", displayName = "Alice", username = "alice" });
+        Assert.Equal(HttpStatusCode.Accepted, registration.StatusCode);
+        await factory.ConfirmEmailAsync(client, "short@example.com", password);
         var login = await Login(factory, client, "short@example.com", password);
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         Assert.True(HasAuthCookie(login));
@@ -256,17 +258,15 @@ public sealed class AuthenticationApiTests
     }
 
     [Theory]
-    [InlineData("invalid", "long enough password", "Alice")]
-    [InlineData("alice@example.com", "1234567", "Alice")]
-    [InlineData("alice@example.com", "", "Alice")]
-    [InlineData("alice@example.com", "long enough password", "  ")]
-    public async Task Invalid_registration_does_not_create_partial_data(string email, string password, string name)
+    [InlineData("invalid", "Alice")]
+    [InlineData("alice@example.com", "  ")]
+    public async Task Invalid_registration_does_not_create_partial_data(string email, string name)
     {
         using var factory = new ApiFactory(testAuthentication: false);
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         await ApiFactory.SetCsrfAsync(client);
-        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, password, displayName = name, username = "validation" });
+        var response = await client.PostAsJsonAsync("/api/auth/register", new { email, displayName = name, username = "validation" });
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -285,7 +285,7 @@ public sealed class AuthenticationApiTests
         var tooLongEmail = maximumEmail + "e";
         Assert.Equal(255, tooLongEmail.Length);
 
-        Assert.Equal(HttpStatusCode.Created, (await Register(client, maximumEmail)).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, (await Register(client, maximumEmail)).StatusCode);
         var rejected = await Register(client, tooLongEmail);
         Assert.Equal(HttpStatusCode.BadRequest, rejected.StatusCode);
         using var scope = factory.Services.CreateScope();
@@ -330,7 +330,7 @@ public sealed class AuthenticationApiTests
                 new { email = "unknown@example.com", password = "wrong", displayName = "Alice", username = "alice" });
             Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
         }
-        var limited = await Login(factory, client, "unknown@example.com");
+        var limited = await client.PostAsJsonAsync("/api/auth/login", new { email = "unknown@example.com", password = "wrong" });
         Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
         Assert.Equal("application/problem+json", limited.Content.Headers.ContentType?.MediaType);
     }
@@ -345,7 +345,7 @@ public sealed class AuthenticationApiTests
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         if (login) (await Register(client, "alice@example.com")).EnsureSuccessStatusCode();
-        if (login) await factory.ConfirmEmailAsync(client, "alice@example.com");
+        if (login) await factory.ConfirmEmailAsync(client, "alice@example.com", Password);
         failure.Enabled = true;
         var response = login ? await Login(factory, client, "alice@example.com") : await Register(client, "alice@example.com");
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
@@ -361,13 +361,13 @@ public sealed class AuthenticationApiTests
     private static async Task<HttpResponseMessage> Register(HttpClient client, string email)
     {
         await ApiFactory.SetCsrfAsync(client);
-        return await client.PostAsJsonAsync("/api/auth/register", new { email, password = Password, displayName = " Alice ", username = "test_" + Guid.NewGuid().ToString("N")[..20] });
+        return await client.PostAsJsonAsync("/api/auth/register", new { email, displayName = " Alice ", username = "test_" + Guid.NewGuid().ToString("N")[..20] });
     }
 
     private static async Task<HttpResponseMessage> Login(ApiFactory factory, HttpClient client, string email, string password = Password)
     {
         await ApiFactory.SetCsrfAsync(client);
-        await factory.ConfirmEmailAsync(client, email);
+        await factory.ConfirmEmailAsync(client, email, Password);
         return await client.PostAsJsonAsync("/api/auth/login", new { email, password });
     }
 

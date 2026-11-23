@@ -236,12 +236,12 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     public string? GetOwnedPhoto(Guid actorId, Guid id) => OwnedItem(actorId, id).PhotoStorageKey;
 
     public string? GetPublicPhoto(Guid id) =>
-        repository.GetAll().SingleOrDefault(item => item.Id == id && item.IsPublic)?.PhotoStorageKey;
+        repository.ReadItem(id, publicOnly: true)?.PhotoStorageKey;
 
     public string? GetPublicOutfitPhoto(Guid outfitId, Guid itemId)
     {
-        var outfit = repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == outfitId && outfit.IsPublic);
-        return outfit?.ItemIds.Contains(itemId) == true ? Item(itemId).PhotoStorageKey : null;
+        var outfit = repository.ReadOutfit(outfitId, publicOnly: true);
+        return outfit?.ItemIds.Contains(itemId) == true ? repository.ReadItem(itemId)?.PhotoStorageKey : null;
     }
 
     public string? GetSharedPhoto(string token, Guid? itemId = null)

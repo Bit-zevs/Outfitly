@@ -57,16 +57,16 @@ test('auth restores the server user and rotates CSRF after login and logout', as
   assert.equal(calls.filter(c => c.url.endsWith('/csrf')).length, 3);
 });
 
-test('registration sends no request until both passwords match exactly', async () => {
+test('confirmation sends no request until both passwords match exactly', async () => {
   const calls = [];
   const auth = createAuth({ async request(path, options) { calls.push({ path, ...options }); return { id: 'new-user' }; } });
   const password = ' мой длинный пароль ';
   for (const confirmation of [undefined, '', 'другой длинный пароль', password.trim()]) {
-    await assert.rejects(auth.register('Анна', 'anna@example.test', password, confirmation, 'anna'), e => e instanceof ApiError && e.status === 400 && e.message === 'Пароли не совпадают.');
+    await assert.rejects(auth.confirmEmail('token', password, confirmation), e => e instanceof ApiError && e.status === 400 && e.message === 'Пароли не совпадают.');
   }
   assert.equal(calls.length, 0);
-  await auth.register('Анна', 'anna@example.test', password, password, 'anna');
-  assert.deepEqual(calls, [{ path: '/auth/register', method: 'POST', anonymous: true, body: { displayName: 'Анна', email: 'anna@example.test', password, username: 'anna' } }]);
+  await auth.confirmEmail('token', password, password);
+  assert.deepEqual(calls, [{ path: '/auth/confirm-email', method: 'POST', anonymous: true, body: { token: 'token', password } }]);
   assert.equal(auth.user, null);
 });
 

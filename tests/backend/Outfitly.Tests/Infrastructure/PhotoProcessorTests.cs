@@ -6,6 +6,19 @@ namespace Outfitly.Tests.Infrastructure;
 public sealed class PhotoProcessorTests
 {
     [Fact]
+    public void Large_regular_photo_keeps_aspect_ratio_within_output_limit()
+    {
+        using var bitmap = new SKBitmap(3000, 1500);
+        bitmap.Erase(SKColors.Coral);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var encoded = image.Encode(SKEncodedImageFormat.Jpeg, 90);
+        var result = new SkiaPhotoProcessor().Process(encoded.ToArray(), "image/jpeg");
+        using var decoded = SKBitmap.Decode(result.Content);
+        Assert.Equal(2048, decoded.Width);
+        Assert.Equal(1024, decoded.Height);
+    }
+
+    [Fact]
     public void Png_animation_control_is_rejected_even_when_the_decoder_ignores_animation()
     {
         using var bitmap = new SKBitmap(2, 3);

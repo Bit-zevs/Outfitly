@@ -17,8 +17,8 @@ public sealed class PostgreSqlAccountTests
         await using var database = await PostgreSqlDatabase.CreateAsync();
         await using var first = database.Open();
         await using var second = database.Open();
-        var alice = await Service(first).RegisterAsync("Alice@example.com", "first long password", "Alice", "alice");
-        var bob = await Service(second).RegisterAsync("alice@EXAMPLE.COM", "second long password", "Bob", "bob");
+        var alice = await Service(first).RegisterAsync("Alice@example.com", "Alice", "alice");
+        var bob = await Service(second).RegisterAsync("alice@EXAMPLE.COM", "Bob", "bob");
         // Both uniqueness checks finish before either save; the database must arbitrate the race.
         var results = await Task.WhenAll(Commit(first), Commit(second));
         Assert.Single(results, error => error is null);
@@ -41,10 +41,10 @@ public sealed class PostgreSqlAccountTests
         Guid owner;
         await using (var register = database.Open())
         {
-            var registered = await Service(register).RegisterAsync("alice@example.com", "a long test password", "Alice", "alice");
+            var registered = await Service(register).RegisterAsync("alice@example.com", "Alice", "alice");
             owner = registered.Id;
             await register.SaveChangesAsync();
-            await Service(register).ConfirmEmailAsync(registered.Confirmation.Token);
+            await Service(register).ConfirmEmailAsync(registered.Confirmation.Token, "a long test password");
             await register.SaveChangesAsync();
         }
         LoginResult first;
@@ -76,7 +76,7 @@ public sealed class PostgreSqlAccountTests
         await using var database = await PostgreSqlDatabase.CreateAsync();
         await using (var write = database.Open())
         {
-            await Service(write).RegisterAsync("alice@example.com", "a long test password", "Alice", "alice");
+            await Service(write).RegisterAsync("alice@example.com", "Alice", "alice");
             write.WardrobeItems.Add(new WardrobeItem(Guid.NewGuid(), Guid.NewGuid(), "No owner", ClothingCategory.Top));
             await Assert.ThrowsAsync<DbUpdateException>(() => write.SaveChangesAsync());
         }

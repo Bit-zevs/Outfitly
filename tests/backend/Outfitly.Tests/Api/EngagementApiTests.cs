@@ -25,7 +25,7 @@ public sealed class EngagementApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsync($"/api/items/{id}/views", null)).StatusCode);
         await ApiFactory.SetCsrfAsync(guest);
         (await guest.PostAsJsonAsync("/api/auth/register", new { email = "pending@example.com", username = "pending", displayName = "Pending", password = "long password 123" })).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Forbidden, (await guest.PostAsJsonAsync("/api/auth/login", new { email = "pending@example.com", password = "long password 123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsJsonAsync("/api/auth/login", new { email = "pending@example.com", password = "long password 123" })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PutAsync($"/api/items/{id}/like", null)).StatusCode);
         using var viewer = await Register(factory, "viewer");
         viewer.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
@@ -157,7 +157,7 @@ public sealed class EngagementApiTests
     {
         var client = factory.CreateClient(); await ApiFactory.SetCsrfAsync(client);
         (await client.PostAsJsonAsync("/api/auth/register", new { email = name + "@example.com", username = name, displayName = name, password = "long password 123" })).EnsureSuccessStatusCode();
-        await factory.ConfirmEmailAsync(client, name + "@example.com");
+        await factory.ConfirmEmailAsync(client, name + "@example.com", "long password 123");
         (await client.PostAsJsonAsync("/api/auth/login", new { email = name + "@example.com", password = "long password 123" })).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(client); return client;
     }

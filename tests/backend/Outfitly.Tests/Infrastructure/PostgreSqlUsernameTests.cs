@@ -48,8 +48,8 @@ public sealed class PostgreSqlUsernameTests
         await using var database = await PostgreSqlDatabase.CreateAsync();
         await using var first = database.Open();
         await using var second = database.Open();
-        await Service(first).RegisterAsync("first@example.com", "long password one", "First", " @ANNA ");
-        await Service(second).RegisterAsync("second@example.com", "long password two", "Second", "anna");
+        await Service(first).RegisterAsync("first@example.com", "First", " @ANNA ");
+        await Service(second).RegisterAsync("second@example.com", "Second", "anna");
         var results = await Task.WhenAll(Commit(first), Commit(second));
         Assert.Single(results, error => error is null);
         Assert.IsType<UsernameConflictException>(Assert.Single(results, error => error is not null));
@@ -66,12 +66,12 @@ public sealed class PostgreSqlUsernameTests
         Guid firstId, secondId;
         await using (var seed = database.Open())
         {
-            var first = await Service(seed).RegisterAsync("first@example.com", "long password one", "First", "first");
-            var second = await Service(seed).RegisterAsync("second@example.com", "long password two", "Second", "second");
+            var first = await Service(seed).RegisterAsync("first@example.com", "First", "first");
+            var second = await Service(seed).RegisterAsync("second@example.com", "Second", "second");
             firstId = first.Id; secondId = second.Id;
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token);
-            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token);
+            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token, "long password one");
+            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token, "long password two");
             await seed.SaveChangesAsync();
         }
         await using (var first = database.Open())
@@ -103,11 +103,11 @@ public sealed class PostgreSqlUsernameTests
         Guid ownerId, publicId, privateId, outfitId;
         await using (var seed = database.Open())
         {
-            var owner = await Service(seed).RegisterAsync("owner@example.com", "long password one", "Анна", "anna_style");
-            var other = await Service(seed).RegisterAsync("other@example.com", "long password two", "Other", "annaxstyle");
+            var owner = await Service(seed).RegisterAsync("owner@example.com", "Анна", "anna_style");
+            var other = await Service(seed).RegisterAsync("other@example.com", "Other", "annaxstyle");
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token);
-            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token);
+            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token, "long password one");
+            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token, "long password two");
             ownerId = owner.Id;
             var wardrobe = new WardrobeService(new EfWardrobeRepository(seed));
             publicId = wardrobe.CreateItem(ownerId, "Public", ClothingCategory.Top).Id;
