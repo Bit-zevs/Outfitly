@@ -25,7 +25,8 @@ dotnet run --project src/backend/Outfitly.Api --launch-profile https
 `/outfits/new`, `/outfits/{id}`, `/outfits/{id}/edit`, `/discover`, `/account`,
 `/public/{items|outfits}/{id}`, `/shared/{items|outfits}/{token}`.
 Например: `/#/wardrobe?category=Top&page=2`. Поиск выполняется по названию;
-публичные подробности находятся в существующих списках, отдельного API для них нет.
+публичный образ открывается отдельным запросом по ID. Каталог публичных образов
+поддерживает поиск по названию, сортировку и страницы по 20 записей.
 
 Подтверждение почты: `/check-email` показывает результат отправки и форму повторного письма;
 `/confirm-email?token=…` подтверждает адрес только после нажатия кнопки и убирает токен

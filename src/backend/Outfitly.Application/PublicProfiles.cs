@@ -12,8 +12,8 @@ public interface IPublicProfileQuery
     Task<PublicPage<ItemView>> ItemsAsync(Guid ownerId, int page, int pageSize, CancellationToken cancellationToken);
     Task<PublicPage<OutfitView>> OutfitsAsync(Guid? ownerId, int page, int pageSize, CancellationToken cancellationToken);
     Task<ItemView?> ItemAsync(Guid ownerId, Guid id, CancellationToken cancellationToken);
-    Task<OutfitView?> OutfitAsync(Guid ownerId, Guid id, CancellationToken cancellationToken);
-    Task<IReadOnlyCollection<OutfitView>> AllOutfitsAsync(CancellationToken cancellationToken);
+    Task<OutfitView?> OutfitAsync(Guid? ownerId, Guid id, CancellationToken cancellationToken);
+    Task<PublicPage<OutfitView>> AllOutfitsAsync(ItemCatalogQuery filter, CancellationToken cancellationToken);
 }
 
 public sealed class PublicProfiles(IPublicProfileQuery query)
@@ -57,5 +57,7 @@ public sealed class PublicProfiles(IPublicProfileQuery query)
     public async Task<OutfitView> OutfitAsync(string username, Guid id, CancellationToken ct) =>
         await query.OutfitAsync((await FindAsync(username, ct)).Id, id, ct) ?? throw new KeyNotFoundException();
 
-    public Task<IReadOnlyCollection<OutfitView>> AllOutfitsAsync(CancellationToken ct) => query.AllOutfitsAsync(ct);
+    public Task<PublicPage<OutfitView>> AllOutfitsAsync(ItemCatalogQuery filter, CancellationToken ct) => query.AllOutfitsAsync(filter.Normalize(), ct);
+    public async Task<OutfitView> PublicOutfitAsync(Guid id, CancellationToken ct) =>
+        await query.OutfitAsync(null, id, ct) ?? throw new KeyNotFoundException();
 }

@@ -95,15 +95,14 @@ export async function outfitsPage(ctx) {
 export async function discover(ctx) {
   if (ctx.route.query.get('tab') === 'people') return peoplePage(ctx);
   const itemsTab = ctx.route.query.get('tab') === 'items';
-  const data = await ctx.get(itemsTab ? `/wardrobe?${catalogQuery(ctx.route.query)}` : '/wardrobe/outfits');
+  const data = await ctx.get(itemsTab ? `/wardrobe?${catalogQuery(ctx.route.query)}` : `/wardrobe/outfits?${catalogQuery(ctx.route.query)}`);
   const query = new URLSearchParams(ctx.route.query); query.set('tab', 'items');
-  return { title: 'Открытая коллекция', html: `<section class="discover-intro"><div><p class="eyebrow">Идеи и сочетания</p><h1>Открытая коллекция</h1><p class="lead">Вдохновение в деталях. Вещи и образы, которыми поделились пользователи Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section><div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link('/discover', 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${query}`, 'Вещи', itemsTab ? 'selected' : '')}${link('/discover?tab=people', 'Люди')}</nav><span class="muted">Открыто для просмотра без входа</span></div>${itemsTab ? `${filters(ctx.route, data)}${data.items.length ? `<div class="cards">${data.items.map(i => itemCard(i, '/public/items')).join('')}</div>` : empty('Пока ничего не найдено', 'Попробуйте другую категорию или измените поиск.')}${pagination(ctx.route, data)}` : data.length ? `<div class="outfit-grid">${data.map(o => outfitCard(o, '/public/outfits')).join('')}</div>` : empty('Коллекция ждёт первых образов', 'Опубликованные образы появятся здесь.')}`, bind: () => bindFilters(ctx) };
+  return { title: 'Открытая коллекция', html: `<section class="discover-intro"><div><p class="eyebrow">Идеи и сочетания</p><h1>Открытая коллекция</h1><p class="lead">Вдохновение в деталях. Вещи и образы, которыми поделились пользователи Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section><div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link('/discover', 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${query}`, 'Вещи', itemsTab ? 'selected' : '')}${link('/discover?tab=people', 'Люди')}</nav><span class="muted">Открыто для просмотра без входа</span></div>${itemsTab ? `${filters(ctx.route, data)}${data.items.length ? `<div class="cards">${data.items.map(i => itemCard(i, '/public/items')).join('')}</div>` : empty('Пока ничего не найдено', 'Попробуйте другую категорию или измените поиск.')}${pagination(ctx.route, data)}` : `${filters(ctx.route, data, true)}${data.items.length ? `<div class="outfit-grid">${data.items.map(o => outfitCard(o, '/public/outfits')).join('')}</div>` : empty('Образы не найдены', 'Измените поиск или опубликуйте первый образ.')}${pagination(ctx.route, data)}`}`, bind: () => bindFilters(ctx) };
 }
 
 async function publicResource(ctx, kind, id) {
   if (kind === 'outfits') {
-    const found = (await ctx.get('/wardrobe/outfits')).find(o => o.id === id);
-    if (found) return found;
+    return ctx.get(`/wardrobe/outfits/${encodeURIComponent(id)}`);
   } else {
     for (let page = 1; ; page++) {
       const data = await ctx.get(`/wardrobe?page=${page}&pageSize=100`);

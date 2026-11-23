@@ -4,7 +4,7 @@ import { createApi, ApiError } from '../../src/frontend/src/api.js';
 import { createAuth } from '../../src/frontend/src/auth.js';
 import { catalogQuery, changedFilter, parseRoute, privateRoute, safeReturn, shareAddress } from '../../src/frontend/src/router.js';
 import { saveItem, saveOutfit, uploadedPhoto } from '../../src/frontend/src/save.js';
-import { detail, outfitItemDetail } from '../../src/frontend/src/pages.js';
+import { discover, detail, outfitItemDetail } from '../../src/frontend/src/pages.js';
 import { validatePhoto } from '../../src/frontend/src/editors.js';
 import { itemCard, photo, choiceField, itemSizes, itemColors } from '../../src/frontend/src/components.js';
 
@@ -202,4 +202,15 @@ test('public outfit detail combines interactions and links to its pieces', async
  const page=await detail({auth:{user:null},get:async()=>({id:'look',name:'Look',isPublic:true,ownerUsername:'anna',items:[{id:'coat',name:'Coat'}]})},'outfits','look','public','anna');
  assert.match(page.html,/public\/outfits\/look\/items\/coat/);
  assert.match(page.html,/social-panel/);assert.doesNotMatch(page.html,/linebox actions" id="workspace-actions"/);
+});
+
+test('public outfit catalog requests a bounded page and preserves search in pagination', async () => {
+ const calls=[];const page=await discover({route:parseRoute('#/discover?search=walk&sort=nameDesc'),get:async path=>{calls.push(path);return{items:[{id:'look',name:'Walk',items:[]}],total:25,page:1,pageSize:20};}});
+ assert.equal(calls[0],'/wardrobe/outfits?search=walk&sort=nameDesc&page=1&pageSize=20');
+ assert.match(page.html,/catalog-search/);assert.match(page.html,/search=walk/);assert.match(page.html,/page=2/);
+});
+
+test('a direct public outfit read never loads the catalog', async () => {
+ const requests=[];const ctx={auth:{user:null},get:async path=>{requests.push(path);return{id:'look',name:'Look',isPublic:true,items:[]};}};
+ const page=await detail(ctx,'outfits','look','public');assert.equal(page.title,'Look');assert.deepEqual(requests,['/wardrobe/outfits/look']);
 });

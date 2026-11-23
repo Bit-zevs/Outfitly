@@ -199,14 +199,14 @@ public sealed class WardrobeApiTests
         Assert.Equal("Updated outfit", shared.GetProperty("name").GetString());
         Assert.Equal(itemId, Assert.Single(shared.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
         Assert.Empty((await Json(await anonymous.GetAsync("/api/wardrobe"))).GetProperty("items").EnumerateArray());
-        Assert.Single((await Json(await anonymous.GetAsync("/api/wardrobe/outfits"))).EnumerateArray());
+        Assert.Single((await Json(await anonymous.GetAsync("/api/wardrobe/outfits"))).GetProperty("items").EnumerateArray());
         Assert.DoesNotContain("token", shared.GetRawText(), StringComparison.OrdinalIgnoreCase);
 
         var deleted = await client.DeleteAsync($"/api/items/{itemId}");
 
         Assert.Equal(HttpStatusCode.NoContent, deleted.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await anonymous.GetAsync(link.Url)).StatusCode);
-        Assert.Empty((await Json(await anonymous.GetAsync("/api/wardrobe/outfits"))).EnumerateArray());
+        Assert.Empty((await Json(await anonymous.GetAsync("/api/wardrobe/outfits"))).GetProperty("items").EnumerateArray());
         Assert.Empty((await Json(await client.GetAsync(route))).GetProperty("items").EnumerateArray());
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync(route)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(route)).StatusCode);
