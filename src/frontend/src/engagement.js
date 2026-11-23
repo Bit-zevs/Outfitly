@@ -12,7 +12,7 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
   let stats;
   let statsRequest = 0;
   let likePending = false;
-  root.innerHTML = '<h2>Обсуждение</h2><div class="engagement-stats"></div><p class="error" role="alert" tabindex="-1" hidden></p><div class="comment-compose"></div><div class="comment-list"></div>';
+  root.innerHTML = '<h2>Обсуждение</h2><div class="engagement-stats"><p class="engagement-summary"></p><button type="button" class="btn outline small reaction-button" id="post-like" hidden></button><p class="engagement-signin" hidden><a href="#/login">Войдите с подтверждённой почтой</a>, чтобы участвовать в обсуждении.</p><p class="sr-only" role="status" id="reaction-status"></p></div><p class="error" role="alert" tabindex="-1" hidden></p><div class="comment-compose"></div><div class="comment-list"></div>';
   const error = root.querySelector('.error');
   const fail = e => { if (active()) { error.textContent = errorMessage(e); error.hidden = false; } };
   async function action(button, operation) {
@@ -24,23 +24,32 @@ export function bindEngagement(ctx, kind, resource, shareToken) {
     const value = await request('/engagement');
     if (!active() || requestId !== statsRequest) return;
     stats = value;
-    root.querySelector('.engagement-stats').innerHTML = `<p>Просмотры: ${value.views} · Лайки: ${value.likes} · Комментарии: ${value.comments}</p>${value.canInteract ? `<button class="btn outline small reaction-button" aria-pressed="${value.isLiked}" id="post-like"><span aria-hidden="true">${value.isLiked ? '♥' : '♡'}</span> ${value.isLiked ? 'Убрать лайк' : 'Нравится'}<span class="reaction-count">${value.likes}</span></button>` : '<p><a href="#/login">Войдите с подтверждённой почтой</a>, чтобы участвовать в обсуждении.</p>'}`;
+    root.querySelector('.engagement-summary').textContent = `Просмотры: ${value.views} · Комментарии: ${value.comments}${value.canInteract ? '' : ` · Лайки: ${value.likes}`}`;
     const like = root.querySelector('#post-like');
-    if (like) {
+    like.hidden = !value.canInteract;
+    root.querySelector('.engagement-signin').hidden = value.canInteract;
+    if (value.canInteract) {
+      like.setAttribute('aria-pressed', String(value.isLiked));
+      like.innerHTML = `<span aria-hidden="true">${value.isLiked ? '♥' : '♡'}</span> ${value.isLiked ? 'Убрать лайк' : 'Нравится'}<span class="reaction-count" aria-label="Лайков: ${value.likes}">${value.likes}</span>`;
       like.disabled = likePending;
       like.onclick = async () => {
         if (likePending) return;
+        const focused = document.activeElement === like;
         likePending = true;
         ++statsRequest; // Discard snapshots started before this mutation.
         try {
           await action(like, async () => {
             await request('/like', { method: value.isLiked ? 'DELETE' : 'PUT' });
             await loadStats();
+            if (active()) root.querySelector('#reaction-status').textContent = value.isLiked ? 'Лайк убран' : 'Отметка «Нравится» поставлена';
           });
         } finally {
           likePending = false;
           const currentLike = active() && root.querySelector('#post-like');
-          if (currentLike) currentLike.disabled = false;
+          if (currentLike) {
+            currentLike.disabled = false;
+            if (focused && document.activeElement === document.body) currentLike.focus({ preventScroll: true });
+          }
         }
       };
     }

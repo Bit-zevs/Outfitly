@@ -4,7 +4,7 @@ import { calendarPage } from './calendar.js';
 import { statisticsPage } from './statistics.js';
 import { createDraftSession, favoritesPage, draftsPage } from './workspace.js';
 import { accountSettings, confirmEmailChangePage } from './account-settings.js';
-import { profilePage } from './profiles.js';
+import { peoplePage, profilePage } from './profiles.js';
 import { createApi, errorMessage } from './api.js';
 import { createAuth } from './auth.js';
 import { avatar, escape, link, photoPlaceholder } from './components.js';
@@ -45,7 +45,7 @@ function header(route) {
     : { primary: [['/', 'Главная'], ['/discover', 'Открытая коллекция']], secondary: [] };
   const isCurrent = path => route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/');
   const renderLinks = links => links.map(([path, name]) => `<a href="#${path}" ${isCurrent(path) ? 'aria-current="page"' : ''}>${name}</a>`).join('');
-  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
+  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/people', 'Люди'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); button.textContent = open ? '×' : '☰'; document.querySelector('#primary-nav').classList.toggle('open', open); };
   document.querySelector('#header').onkeydown = event => { if (event.key === 'Escape') { const profile = document.querySelector('.profile-menu'); if (profile?.open) { profile.open = false; profile.querySelector('summary').focus(); return; } if (button.getAttribute('aria-expanded') !== 'true') return; button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', 'Открыть меню'); button.textContent = '☰'; document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
@@ -64,6 +64,8 @@ async function resolve(ctx) {
   if (path === '/wardrobe') return wardrobe(ctx);
   if (path === '/calendar') return calendarPage(ctx);
   if (path === '/outfits') return outfitsPage(ctx);
+  if (path === '/people') return peoplePage(ctx);
+  if (path === '/discover' && ctx.route.query.get('tab') === 'people') { const query = new URLSearchParams(ctx.route.query); query.delete('tab'); query.set('view', 'search'); navigate(`/people${query.size ? `?${query}` : ''}`, true); return { title: 'Люди', html: '' }; }
   if (path === '/discover') return discover(ctx);
   if (path === '/favorites') return favoritesPage(ctx);
   if (path === '/drafts') return draftsPage(ctx);

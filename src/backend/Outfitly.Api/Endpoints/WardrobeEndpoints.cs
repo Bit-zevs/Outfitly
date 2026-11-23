@@ -67,8 +67,11 @@ public static class WardrobeEndpoints
                 .Select(link => new ShareLinkResponse(link.Id, link.Token, $"/api/shared/items/{link.Token}")));
 
         var outfits = app.MapGroup("/api/outfits").RequireAuthorization(CurrentActor.PolicyName);
-        outfits.MapGet("/", (ClaimsPrincipal user, WardrobeService service) => service.GetMyOutfits(CurrentActor.Id(user))
-            .Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/items/{id}/photo")));
+        outfits.MapGet("/", async (HttpContext http, OutfitCatalog catalog) =>
+        {
+            var page = await catalog.GetAsync(CurrentActor.Id(http.User), CatalogRequest.Parse(http.Request.Query), http.RequestAborted);
+            return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/items/{id}/photo")), page.Total, page.Page, page.PageSize };
+        });
         outfits.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             WardrobeResponses.Outfit(service.GetOutfit(CurrentActor.Id(user), id), itemId => $"/api/items/{itemId}/photo"));
         outfits.MapPost("/", (OutfitRequest request, ClaimsPrincipal user, WardrobeService service) =>

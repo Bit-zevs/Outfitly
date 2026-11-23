@@ -91,7 +91,8 @@ Email обрезается по краям, проверяется на форм
 | GET | `/api/shared/outfits/{token}/items/{itemId}/photo` | Фото вещи в образе по активной ссылке |
 | PATCH | `/api/items/{id}/publication` | Публикация или снятие публикации |
 | GET, POST | `/api/items/{id}/share-links` | Активные ссылки / создание ссылки на свою вещь |
-| GET, POST | `/api/outfits` | Личный список / создание образа |
+| GET | `/api/outfits` | Только свои образы: search, sort=nameAsc/nameDesc, page=1, pageSize=20 (1–100); ответ items/total/page/pageSize |
+| POST | `/api/outfits` | Создать личный образ |
 | GET, PUT, DELETE | `/api/outfits/{id}` | Чтение / обновление / удаление своего образа |
 | POST, DELETE | `/api/outfits/{id}/items/{itemId}` | Добавление / удаление вещи из своего образа |
 | PATCH | `/api/outfits/{id}/publication` | Публикация или снятие публикации |
