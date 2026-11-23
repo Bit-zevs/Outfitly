@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   backend:
@@ -79,3 +79,32 @@ jobs:
         run: npm run build
       - name: Test
         run: npm test
+
+  deploy:
+    name: Deploy to production
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 60
+    concurrency:
+      group: outfitly-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy tested commit over SSH
+        shell: bash
+        env:
+          VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          umask 077
+          ssh_dir=$(mktemp -d)
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          printf '%s\n' "${VPS_DEPLOY_KEY:?Missing VPS_DEPLOY_KEY}" > "$ssh_dir/key"
+          printf '%s\n' "${VPS_KNOWN_HOSTS:?Missing VPS_KNOWN_HOSTS}" > "$ssh_dir/known_hosts"
+          ssh -F /dev/null -T -n -i "$ssh_dir/key" \
+            -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" \
+            -o GlobalKnownHostsFile=/dev/null \
+            deploy@155.212.246.57 "deploy:${GITHUB_SHA}"
