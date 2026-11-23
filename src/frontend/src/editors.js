@@ -14,16 +14,19 @@ export async function itemEditor(ctx, id) {
   const draft = { id, baseline, photoMode: baseline?.photoUrl && !uploadedPhoto(baseline) ? 'url' : 'file', file: null, removePhoto: false, metadataSaved: false, publishOnCreate: !id };
   let previewUrl; let autosave;
   const heading = id ? 'Редактировать вещь' : 'Добавить вещь';
-  return { title: heading, html: `${crumbs('/wardrobe', 'Мой гардероб', heading)}${title('Ваша коллекция', heading, 'Начните с основных деталей. Остальное можно добавить позже.')}<form id="item-form"><div class="form-layout"><div>${field('Название', 'name', baseline?.name, { required: true })}<div class="form-grid"><div class="field"><label for="category">Категория *</label><select name="category" id="category" required><option value="">Выберите категорию</option>${Object.entries(categories).map(([key, label]) => `<option value="${key}" ${baseline?.category === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div>${choiceField('Цвет', 'color', baseline?.color, itemColors)}${choiceField('Размер', 'size', baseline?.size, itemSizes)}${field('Бренд', 'brand', baseline?.brand)}</div><div class="field"><label for="description">Описание</label><textarea id="description" name="description" rows="4">${escape(baseline?.description)}</textarea></div>${!id ? `<fieldset class="item-visibility"><legend>Кто увидит вещь</legend><label class="check-label"><input type="radio" name="visibility" value="private" checked>Только я</label><label class="check-label"><input type="radio" name="visibility" value="public">Все пользователи</label><small>Публичная вещь появится в открытой коллекции после сохранения.</small></fieldset>` : ''}<fieldset class="photo-source"><legend>Фотография</legend><div class="source-options"><label><input type="radio" name="photoMode" value="file" ${draft.photoMode === 'file' ? 'checked' : ''}>С устройства</label><label><input type="radio" name="photoMode" value="url" ${draft.photoMode === 'url' ? 'checked' : ''}>По ссылке</label></div><div id="file-panel" ${draft.photoMode !== 'file' ? 'hidden' : ''}><label class="file-label" for="file">Выбрать фотографию<input id="file" type="file" accept="image/jpeg,image/png" aria-describedby="file-hint"></label><small id="file-hint">JPEG или PNG, до 5 МБ</small><p id="file-name" class="muted"></p></div><div id="url-panel" ${draft.photoMode !== 'url' ? 'hidden' : ''}>${field('Ссылка на фото', 'photoUrl', uploadedPhoto(baseline) ? '' : baseline?.photoUrl, { type: 'url', hint: 'Полный адрес, начинающийся с http:// или https://' })}</div><button type="button" class="text-button danger" id="remove-photo">Убрать фотографию</button></fieldset></div><aside class="preview-panel"><div id="photo-preview">${baseline ? photo(baseline) : photo({})}</div><p class="eyebrow">Ваша вещь, ваши детали</p><p class="muted">Предварительный просмотр фотографии</p></aside></div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="conflict-review" hidden></div><div class="footer-actions">${link(id ? `/items/${id}` : '/wardrobe', 'Отмена', 'btn outline')}<button class="btn" type="submit" id="save-item">Сохранить вещь</button></div></form>`, cleanup() { autosave?.dispose(); if (previewUrl) URL.revokeObjectURL(previewUrl); }, bind() {
+  return { title: heading, html: `${crumbs('/wardrobe', 'Мой гардероб', heading)}${title('Ваша коллекция', heading, 'Начните с основных деталей. Остальное можно добавить позже.')}<form id="item-form"><div class="form-layout"><div>${field('Название', 'name', baseline?.name, { required: true })}<div class="form-grid"><div class="field"><label for="category">Категория *</label><select name="category" id="category" required><option value="">Выберите категорию</option>${Object.entries(categories).map(([key, label]) => `<option value="${key}" ${baseline?.category === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div>${choiceField('Цвет', 'color', baseline?.color, itemColors)}${choiceField('Размер', 'size', baseline?.size, itemSizes)}${field('Бренд', 'brand', baseline?.brand)}</div><div class="field"><label for="description">Описание</label><textarea id="description" name="description" rows="4">${escape(baseline?.description)}</textarea></div><fieldset class="photo-source"><legend>Фотография</legend><div class="source-options"><label><input type="radio" name="photoMode" value="file" ${draft.photoMode === 'file' ? 'checked' : ''}>С устройства</label><label><input type="radio" name="photoMode" value="url" ${draft.photoMode === 'url' ? 'checked' : ''}>По ссылке</label></div><div id="file-panel" ${draft.photoMode !== 'file' ? 'hidden' : ''}><label class="file-label" for="file">Выбрать фотографию<input id="file" type="file" accept="image/jpeg,image/png" aria-describedby="file-hint file-error"></label><small id="file-hint">JPEG или PNG, до 5 МБ</small><p id="file-name" class="muted" role="status"></p><p class="field-error" role="alert" id="file-error"></p></div><div id="url-panel" ${draft.photoMode !== 'url' ? 'hidden' : ''}>${field('Ссылка на фото', 'photoUrl', uploadedPhoto(baseline) ? '' : baseline?.photoUrl, { type: 'url', hint: 'Полный адрес, начинающийся с http:// или https://' })}</div><button type="button" class="text-button danger" id="remove-photo">Убрать фотографию</button></fieldset></div><aside class="preview-panel"><div id="photo-preview">${baseline ? photo(baseline) : photo({})}</div><p class="muted">Предварительный просмотр фотографии</p></aside>${!id ? `<fieldset class="item-visibility"><legend>Кто увидит вещь</legend><label class="check-label"><input type="radio" name="visibility" value="private" checked>Только я</label><label class="check-label"><input type="radio" name="visibility" value="public">Все пользователи</label><small>Публичная вещь появится в открытой коллекции после сохранения.</small></fieldset>` : ''}</div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="conflict-review" hidden></div><div class="footer-actions">${link(id ? `/items/${id}` : '/wardrobe', 'Отмена', 'btn outline')}<button class="btn" type="submit" id="save-item">Сохранить вещь</button></div></form>`, cleanup() { autosave?.dispose(); if (previewUrl) URL.revokeObjectURL(previewUrl); }, bind() {
     const form = document.querySelector('#item-form');
     const error = document.querySelector('#form-error');
     const saveButton = document.querySelector('#save-item');
+    const fileInput = form.querySelector('#file');
+    const fileError = form.querySelector('#file-error');
+    const clearFileError = () => { fileError.textContent = ''; fileInput.removeAttribute('aria-invalid'); };
     let locked = false;
     function preview(url) {
       const target = document.querySelector('#photo-preview');
       target.replaceChildren();
       const frame = document.createElement('div'); frame.className = 'photo';
-      if (url) { const img = document.createElement('img'); img.src = url; img.alt = 'Предварительный просмотр'; img.referrerPolicy = 'no-referrer'; frame.append(img); }
+      if (url) { const img = document.createElement('img'); img.width = 800; img.height = 800; img.src = url; img.alt = 'Предварительный просмотр'; img.referrerPolicy = 'no-referrer'; frame.append(img); }
       else { frame.innerHTML = photoPlaceholder(); }
       target.append(frame);
     }
@@ -36,19 +39,21 @@ export async function itemEditor(ctx, id) {
     }
     mode();
     form.oninput = () => { ctx.setDirty(true); autosave?.changed(); form.elements.name.setCustomValidity(''); form.elements.photoUrl.setCustomValidity(''); };
-    form.querySelectorAll('[name="photoMode"]').forEach(input => { input.onchange = mode; });
+    form.querySelectorAll('[name="photoMode"]').forEach(input => { input.onchange = () => { clearFileError(); mode(); }; });
     form.elements.photoUrl.oninput = () => { mode(); };
-    document.querySelector('#file').onchange = event => {
+    fileInput.onchange = event => {
       const file = event.target.files[0];
       if (!file) return;
       const message = validatePhoto(file);
-      if (message) { event.target.value = ''; error.hidden = false; error.textContent = message; error.focus(); return; }
+      clearFileError();
+      if (message) { event.target.value = ''; fileInput.setAttribute('aria-invalid', 'true'); fileError.textContent = message; fileInput.focus(); return; }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       draft.file = file; draft.removePhoto = false; previewUrl = URL.createObjectURL(file);
       document.querySelector('#file-name').textContent = file.name;
       error.hidden = true; mode(); ctx.setDirty(true); autosave?.changed();
     };
     document.querySelector('#remove-photo').onclick = () => {
+      clearFileError();
       draft.file = null; draft.restoredPhotoUrl = null; draft.removePhoto = true;
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       previewUrl = null; form.elements.photoUrl.value = ''; document.querySelector('#file').value = ''; document.querySelector('#file-name').textContent = '';
@@ -111,7 +116,7 @@ export async function outfitEditor(ctx, id) {
     function renderAvailable() {
       document.querySelector('#available-items').innerHTML = available.length ? available.map(item => {
         const selected = draft.selected.some(i => i.id === item.id);
-        return `<div class="editor-choice">${photo(item, '', true)}<div><strong>${escape(item.name)}</strong><small>${escape(categories[item.category])}${item.brand ? ` · ${escape(item.brand)}` : ''}</small></div><button class="icon-button" type="button" data-add="${escape(item.id)}" ${selected || isSaving() ? 'disabled' : ''} aria-label="${selected ? 'Уже добавлено:' : 'Добавить'} ${escape(item.name)}">${selected ? '✓' : '+'}</button></div>`;
+        return `<div class="editor-choice${selected ? ' is-selected' : ''}">${photo(item, '', true)}<div><strong>${escape(item.name)}</strong><small>${escape(categories[item.category])}${item.brand ? ` · ${escape(item.brand)}` : ''}</small></div><button class="icon-button" type="button" data-add="${escape(item.id)}" ${selected || isSaving() ? 'disabled' : ''} aria-label="${selected ? 'Уже добавлено:' : 'Добавить'} ${escape(item.name)}">${selected ? '✓' : '+'}</button></div>`;
       }).join('') : `<div class="empty small-empty"><p>Вещи не найдены.</p>${link('/items/new', 'Добавить вещь')}</div>`;
       document.querySelectorAll('[data-add]').forEach(button => { button.onclick = () => {
         if (isSaving()) return;

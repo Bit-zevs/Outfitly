@@ -29,7 +29,7 @@ export function bindWorkspaceActions(ctx, kind, resource, token) {
 export async function favoritesPage(ctx) {
   const kind = ctx.route.query.get('kind') === 'items' ? 'items' : 'outfits';
   const page = await ctx.get(`/favorites?kind=${kind}&page=${Number(ctx.route.query.get('page')) || 1}`);
-  return { title: 'Избранное', html: `${title('Сохранённое для вас', 'Избранное')}<nav class="tabs">${link('/favorites', 'Образы', kind === 'outfits' ? 'selected' : '')}${link('/favorites?kind=items', 'Вещи', kind === 'items' ? 'selected' : '')}</nav>${page.items.length ? `<div class="cards">${page.items.map(x => `<article class="linebox">${x.available ? `${photo({ name: x.name, photoUrl: x.photoUrl })}${link(x.route, x.name)}` : '<h2>Недоступно</h2><p>Оригинал удалён или доступ к нему закрыт.</p>'}<button class="btn outline small" data-remove-favorite="${escape(x.targetId)}">Убрать из избранного</button></article>`).join('')}</div>` : empty('В избранном пока пусто', 'Сохраняйте вещи и образы на их страницах.')}${pagination(ctx.route, page)}<p class="error" role="alert" hidden id="favorites-error"></p>`, bind() {
+  return { title: 'Избранное', html: `${title('Сохранённое для вас', 'Избранное')}<nav class="tabs">${link('/favorites', 'Образы', kind === 'outfits' ? 'selected' : '')}${link('/favorites?kind=items', 'Вещи', kind === 'items' ? 'selected' : '')}</nav>${page.items.length ? `<div class="cards">${page.items.map(x => `<article class="linebox favorite-card">${x.available ? `<a href="#${escape(x.route)}">${photo({ name: x.name, photoUrl: x.photoUrl }, '', true)}<h2>${escape(x.name)}</h2></a>` : '<h2>Недоступно</h2><p>Оригинал удалён или доступ к нему закрыт.</p>'}<button class="btn outline small" data-remove-favorite="${escape(x.targetId)}">Убрать из избранного</button></article>`).join('')}</div>` : empty('В избранном пока пусто', 'Сохраняйте вещи и образы на их страницах.')}${pagination(ctx.route, page)}<p class="error" role="alert" hidden id="favorites-error"></p>`, bind() {
     document.querySelectorAll('[data-remove-favorite]').forEach(button => { button.onclick = async () => {
       if (button.disabled) return; button.disabled = true;
       try { await ctx.api.request(`/${kind}/${button.dataset.removeFavorite}/favorite`, { method: 'DELETE' }); if (ctx.isCurrent()) ctx.refresh(); }
@@ -51,7 +51,7 @@ export async function draftsPage(ctx) {
 }
 
 export function createDraftSession({ ctx, kind, id, form, draft, baseline, refresh }) {
-  const panel = document.createElement('section'); panel.className = 'linebox server-draft'; panel.setAttribute('aria-live', 'polite'); (form.querySelector('.footer-actions') || form).append(panel);
+  const panel = document.createElement('section'); panel.className = 'linebox server-draft'; panel.setAttribute('aria-live', 'polite'); (form.querySelector('.footer-actions') || form).prepend(panel);
   let stored = null, draftId = crypto.randomUUID(), baseVersion = baseline?.editVersion || null;
   let timer, running, generation = 0, savedGeneration = 0, uploadedFile = null, disposed = false, blocked = true, completed = false, finalizing = false;
   const active = () => !disposed && ctx.isCurrent() && form.isConnected;

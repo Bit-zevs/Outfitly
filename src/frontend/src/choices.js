@@ -12,6 +12,7 @@ export function enhanceChoices(root) {
     const id = 'choice-' + (select.id || select.name || 'field') + '-' + document.querySelectorAll('.choice').length;
     list.id = id; list.setAttribute('aria-label', name);
     trigger.setAttribute('aria-haspopup', 'listbox'); trigger.setAttribute('aria-expanded', 'false'); trigger.setAttribute('aria-controls', id);
+    if (select.dataset.filterFocus) trigger.dataset.filterFocus = select.dataset.filterFocus;
     select.after(wrapper); wrapper.append(trigger, list); select.hidden = true;
     if (!select.id) select.id = id + '-native';
     trigger.id = id + '-trigger';

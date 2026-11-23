@@ -660,26 +660,12 @@ strong {
 
 .quick-card>div {
   padding: 25px;
-}
-
-.quick-card .eyebrow {
-  font-size: 9px;
-  margin-bottom: 10px;
+  align-self: center;
 }
 
 .quick-card h3 {
   font-size: 27px;
-  margin-bottom: 10px;
-}
-
-.quick-card p:not(.eyebrow) {
-  font-size: 13px;
-  color: var(--muted);
-  margin-bottom: 12px;
-}
-
-.quick-card span {
-  font-size: 25px;
+  margin-bottom: 0;
 }
 
 .quick-card img {
@@ -736,6 +722,15 @@ strong {
   width: 100%;
   padding: 12px 15px;
   min-height: 46px;
+}
+
+.search-box > label {
+  flex: 1;
+  min-width: 0;
+}
+
+.search-box :focus-visible {
+  outline-offset: -4px;
 }
 
 .search-box .icon-button {
@@ -1084,13 +1079,21 @@ strong {
   aspect-ratio: 1/1;
 }
 
-.preview-panel .eyebrow {
-  margin: 25px 0 8px;
-  font-size: 10px;
-}
-
 .preview-panel p:last-child {
   font-size: 13px;
+  margin: 0;
+}
+
+.form-layout > .preview-panel {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+#photo-preview + p {
+  margin-top: 12px;
+}
+
+#file-error:empty {
   margin: 0;
 }
 
@@ -1544,7 +1547,6 @@ dialog { overscroll-behavior: contain; }
 .quick-card { transition: background-color .15s ease; }
 .quick-card:hover { background: #e8dfd4; }
 .quick-card:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-.quick-action { font-size: 14px!important; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .field input:focus-visible,.field select:focus-visible,.field textarea:focus-visible,
 .editor-search input:focus-visible,.editor-search select:focus-visible { border-color: var(--accent); }
 .wardrobe-filters .field { margin-bottom: 0; }
@@ -2330,8 +2332,7 @@ input[type=file]::file-selector-button:hover { background: #e2d9cd; }
 
 @media(max-width:600px) { .workspace-nav { justify-content: flex-start; gap: 4px; padding: 8px 16px; } .workspace-nav a { padding: 8px 12px; font-size: 13px; } .support-filters .btn { flex: 1; } .support-filters .field { flex-basis: 100%; } }
 
-.footer-actions .server-draft { flex: 0 0 100%; text-align: right; }
-.footer-actions .server-draft.needs-attention { text-align: left; }
+.footer-actions .server-draft { flex: 0 0 100%; text-align: start; }
 .footer-actions:has(.needs-attention) { position: static; }
 
 /* Profile navigation and accessible custom choices. */
@@ -2341,6 +2342,7 @@ input[type=file]::file-selector-button:hover { background: #e2d9cd; }
 .profile-menu-panel { position: absolute; right: 0; top: calc(100% + 14px); z-index: 20; width: 240px; max-width: calc(100vw - 32px); padding: 8px; border: 1px solid var(--line); border-radius: 18px; background: var(--white); box-shadow: 0 12px 36px #29241e18; }
 .profile-menu-panel a { display: flex; align-items: center; min-height: 44px; padding: 10px 14px; border-radius: 12px; font-size: 14px; }
 .profile-menu-panel a:hover,.profile-menu-panel a[aria-current] { background: var(--sand); }
+.profile-menu-group { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
 .profile-editor { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.5fr); gap: 24px; }
 .profile-editor > h2 { grid-column: 1 / -1; margin: 0; }
 .avatar-editor { min-width: 0; }
@@ -2467,6 +2469,25 @@ input,textarea,select,button,a { scroll-margin-block: 100px; }
 .access-panel h2 { font: normal 24px/1.3 Georgia,serif; margin-bottom: 20px; }
 .access-links { border-top: 1px solid var(--line); padding-top: 16px; margin-top: 18px; }
 .access-links p { font-size: 13px; margin-bottom: 14px; }
+.access-links h3 { font: 600 15px/1.4 Arial, sans-serif; margin-bottom: 6px; }
+
+.editor-choice.is-selected { background: var(--sand); }
+.editor-choice.is-selected .icon-button { color: var(--success); opacity: 1; }
+.item-card .card-heading, .outfit-card .card-heading {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.card-heading .badge { white-space: normal; }
+.card-heading h3, .item-card p, .outfit-card p { overflow-wrap: anywhere; }
+.favorite-card > a { display: block; }
+.favorite-card h2 { font-size: 20px; margin: 12px 0; }
+.favorite-card > button { max-width: 100%; white-space: normal; }
+
+@media (max-width: 600px) {
+  .preview-panel .photo { max-height: 320px; aspect-ratio: 4 / 3; }
+  .access-links .btn { width: 100%; }
+}
 .copy-link-button { margin-left: auto; }
 .pieces a { border-radius: 12px; padding: 6px; min-width: 0; }
 .pieces a:hover { background: var(--sand); }
