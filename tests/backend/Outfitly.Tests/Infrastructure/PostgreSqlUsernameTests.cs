@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -50,31 +52,46 @@ public sealed class PostgreSqlUsernameTests
         const string previous = "20261123154006_CatalogCreationDates";
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync(previous);
-        var service = Service(context);
         const string password = "a long confirmation password";
-        var pending = await service.RegisterAsync("pending@example.com", "Pending");
-        var verified = await service.RegisterAsync("verified@example.com", "Verified");
-        await context.SaveChangesAsync();
-        (await context.Users.FindAsync(pending.Id))!.ChangeUsername("legacy_pending");
-        await service.ConfirmEmailAsync(verified.Confirmation.Token, password, "verified");
-        await context.SaveChangesAsync();
+        var pendingId = Guid.NewGuid();
+        var verifiedId = Guid.NewGuid();
+        const string pendingToken = "legacy_token_padded_to_forty_three_chars_ab";
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(pendingToken)));
+        var now = DateTime.UtcNow;
+        var passwordHash = new AccountPasswordHasher().Hash(password);
+        // Use the historical schema for fixture writes before the migration under test.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Users" ("Id", "DisplayName", "Username")
+            VALUES ({pendingId}, 'Pending', 'legacy_pending'), ({verifiedId}, 'Verified', 'verified')
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Accounts" ("UserId", "Email", "NormalizedEmail", "PasswordHash", "EmailConfirmed",
+                "ConfirmationTokenHash", "ConfirmationIssuedAtUtc", "ConfirmationExpiresAtUtc", "SessionVersion")
+            VALUES
+                ({pendingId}, 'pending@example.com', 'PENDING@EXAMPLE.COM', '', false,
+                    {tokenHash}, {now}, {now.AddHours(24)}, {Guid.Empty}),
+                ({verifiedId}, 'verified@example.com', 'VERIFIED@EXAMPLE.COM', {passwordHash}, true,
+                    NULL, NULL, NULL, {Guid.Empty})
+            """);
 
         await migrator.MigrateAsync();
         context.ChangeTracker.Clear();
-        var temporary = Assert.IsType<User>(await context.Users.FindAsync(pending.Id)).Username;
+        var temporary = Assert.IsType<User>(await context.Users.FindAsync(pendingId)).Username;
         Assert.StartsWith("~", temporary);
         Assert.False(await context.Users.AnyAsync(user => user.Username == "legacy_pending"));
-        Assert.Equal("verified", (await context.Users.FindAsync(verified.Id))!.Username);
+        Assert.Equal("verified", (await context.Users.FindAsync(verifiedId))!.Username);
         await migrator.MigrateAsync(previous);
         context.ChangeTracker.Clear();
-        var rollback = (await context.Users.FindAsync(pending.Id))!.Username;
+        var rollback = await context.Database.SqlQuery<string>($"""
+            SELECT "Username" AS "Value" FROM "Users" WHERE "Id" = {pendingId}
+            """).SingleAsync();
         Assert.Equal(rollback, Usernames.Normalize(rollback));
         await migrator.MigrateAsync();
         context.ChangeTracker.Clear();
-        Assert.Equal(temporary, (await context.Users.FindAsync(pending.Id))!.Username);
-        await service.ConfirmEmailAsync(pending.Confirmation.Token, password, "legacy_pending");
+        Assert.Equal(temporary, (await context.Users.FindAsync(pendingId))!.Username);
+        await Service(context).ConfirmEmailAsync(pendingToken, password, "legacy_pending");
         await context.SaveChangesAsync();
-        Assert.Equal(pending.Id, (await context.Users.SingleAsync(user => user.Username == "legacy_pending")).Id);
+        Assert.Equal(pendingId, (await context.Users.SingleAsync(user => user.Username == "legacy_pending")).Id);
     }
 
     [PostgreSqlFact]
