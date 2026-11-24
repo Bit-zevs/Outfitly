@@ -6,6 +6,7 @@ public sealed class Outfit
 
     public Guid Id { get; }
     public Guid OwnerId { get; }
+    public DateTime? CreatedAtUtc { get; private set; } = DateTime.UtcNow;
     public string Name { get; private set; }
     public string? Description { get; private set; }
     public bool IsPublic { get; private set; }

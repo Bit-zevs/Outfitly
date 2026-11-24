@@ -71,6 +71,22 @@ public sealed class SharedReadTests
         Assert.All(materialized.Entities.OfType<ShareLink>(), link =>
             Assert.Contains(link.Token, new[] { data.ItemToken, data.OutfitToken }));
         Assert.Empty(read.ChangeTracker.Entries());
+
+        materialized.Entities.Clear();
+        var missing = Guid.NewGuid();
+        var engagement = new PostEngagement(new EfWardrobeRepository(read), new EfPostInteractionStore(read), TimeProvider.System);
+        Assert.Null(service.GetPublicPhoto(unrelatedId));
+        Assert.Null(service.GetPublicPhoto(missing));
+        Assert.Null(service.GetPublicOutfitPhoto(missing, data.ItemId));
+        Assert.Throws<KeyNotFoundException>(() => engagement.Read(unrelatedId, false, null, null));
+        Assert.Throws<KeyNotFoundException>(() => engagement.Comments(missing, true, null, null, null, 1));
+        Assert.Empty(materialized.Entities);
+
+        Assert.Equal("selected-photo", service.GetPublicOutfitPhoto(data.OutfitId, data.ItemId));
+        Assert.Equal(0, engagement.Read(data.OutfitId, true, null, null).Comments);
+        Assert.All(materialized.Entities.OfType<WardrobeItem>(), item => Assert.Equal(data.ItemId, item.Id));
+        Assert.All(materialized.Entities.OfType<Outfit>(), outfit => Assert.Equal(data.OutfitId, outfit.Id));
+        Assert.Empty(read.ChangeTracker.Entries());
     }
 
     private sealed class MaterializedEntities : IMaterializationInterceptor

@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -43,20 +45,74 @@ public sealed class PostgreSqlUsernameTests
     }
 
     [PostgreSqlFact]
-    public async Task Concurrent_registrations_of_case_variants_commit_one_complete_account()
+    public async Task Migration_releases_legacy_pending_nicks_without_changing_verified_profiles_or_tokens()
+    {
+        await using var database = await PostgreSqlDatabase.CreateAsync();
+        await using var context = database.Open();
+        const string previous = "20261123154006_CatalogCreationDates";
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync(previous);
+        const string password = "a long confirmation password";
+        var pendingId = Guid.NewGuid();
+        var verifiedId = Guid.NewGuid();
+        const string pendingToken = "legacy_token_padded_to_forty_three_chars_ab";
+        var tokenHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(pendingToken)));
+        var now = DateTime.UtcNow;
+        var passwordHash = new AccountPasswordHasher().Hash(password);
+        // Use the historical schema for fixture writes before the migration under test.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Users" ("Id", "DisplayName", "Username")
+            VALUES ({pendingId}, 'Pending', 'legacy_pending'), ({verifiedId}, 'Verified', 'verified')
+            """);
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO "Accounts" ("UserId", "Email", "NormalizedEmail", "PasswordHash", "EmailConfirmed",
+                "ConfirmationTokenHash", "ConfirmationIssuedAtUtc", "ConfirmationExpiresAtUtc", "SessionVersion")
+            VALUES
+                ({pendingId}, 'pending@example.com', 'PENDING@EXAMPLE.COM', '', false,
+                    {tokenHash}, {now}, {now.AddHours(24)}, {Guid.Empty}),
+                ({verifiedId}, 'verified@example.com', 'VERIFIED@EXAMPLE.COM', {passwordHash}, true,
+                    NULL, NULL, NULL, {Guid.Empty})
+            """);
+
+        await migrator.MigrateAsync();
+        context.ChangeTracker.Clear();
+        var temporary = Assert.IsType<User>(await context.Users.FindAsync(pendingId)).Username;
+        Assert.StartsWith("~", temporary);
+        Assert.False(await context.Users.AnyAsync(user => user.Username == "legacy_pending"));
+        Assert.Equal("verified", (await context.Users.FindAsync(verifiedId))!.Username);
+        await migrator.MigrateAsync(previous);
+        context.ChangeTracker.Clear();
+        var rollback = await context.Database.SqlQuery<string>($"""
+            SELECT "Username" AS "Value" FROM "Users" WHERE "Id" = {pendingId}
+            """).SingleAsync();
+        Assert.Equal(rollback, Usernames.Normalize(rollback));
+        await migrator.MigrateAsync();
+        context.ChangeTracker.Clear();
+        Assert.Equal(temporary, (await context.Users.FindAsync(pendingId))!.Username);
+        await Service(context).ConfirmEmailAsync(pendingToken, password, "legacy_pending");
+        await context.SaveChangesAsync();
+        Assert.Equal(pendingId, (await context.Users.SingleAsync(user => user.Username == "legacy_pending")).Id);
+    }
+
+    [PostgreSqlFact]
+    public async Task Concurrent_confirmations_of_case_variants_claim_the_nick_once()
     {
         await using var database = await PostgreSqlDatabase.CreateAsync();
         await using var first = database.Open();
         await using var second = database.Open();
-        await Service(first).RegisterAsync("first@example.com", "long password one", "First", " @ANNA ");
-        await Service(second).RegisterAsync("second@example.com", "long password two", "Second", "anna");
+        var a = await Service(first).RegisterAsync("first@example.com", "First");
+        var b = await Service(second).RegisterAsync("second@example.com", "Second");
+        await first.SaveChangesAsync();
+        await second.SaveChangesAsync();
+        await Service(first).ConfirmEmailAsync(a.Confirmation.Token, "a long confirmation password", " @ANNA ");
+        await Service(second).ConfirmEmailAsync(b.Confirmation.Token, "a long confirmation password", "anna");
         var results = await Task.WhenAll(Commit(first), Commit(second));
         Assert.Single(results, error => error is null);
         Assert.IsType<UsernameConflictException>(Assert.Single(results, error => error is not null));
         await using var read = database.Open();
-        var user = await read.Users.SingleAsync();
-        Assert.Equal("anna", user.Username);
-        Assert.Equal(user.Id, (await read.Accounts.SingleAsync()).UserId);
+        var user = await read.Users.SingleAsync(user => user.Username == "anna");
+        Assert.Equal(user.Id, (await read.Accounts.SingleAsync(account => account.EmailConfirmed)).UserId);
+        Assert.Equal(2, await read.Accounts.CountAsync());
     }
 
     [PostgreSqlFact]
@@ -66,12 +122,12 @@ public sealed class PostgreSqlUsernameTests
         Guid firstId, secondId;
         await using (var seed = database.Open())
         {
-            var first = await Service(seed).RegisterAsync("first@example.com", "long password one", "First", "first");
-            var second = await Service(seed).RegisterAsync("second@example.com", "long password two", "Second", "second");
+            var first = await Service(seed).RegisterAsync("first@example.com", "First");
+            var second = await Service(seed).RegisterAsync("second@example.com", "Second");
             firstId = first.Id; secondId = second.Id;
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token);
-            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token);
+            await Service(seed).ConfirmEmailAsync(first.Confirmation.Token, "long password one", "first");
+            await Service(seed).ConfirmEmailAsync(second.Confirmation.Token, "long password two", "second");
             await seed.SaveChangesAsync();
         }
         await using (var first = database.Open())
@@ -103,11 +159,11 @@ public sealed class PostgreSqlUsernameTests
         Guid ownerId, publicId, privateId, outfitId;
         await using (var seed = database.Open())
         {
-            var owner = await Service(seed).RegisterAsync("owner@example.com", "long password one", "Анна", "anna_style");
-            var other = await Service(seed).RegisterAsync("other@example.com", "long password two", "Other", "annaxstyle");
+            var owner = await Service(seed).RegisterAsync("owner@example.com", "Анна");
+            var other = await Service(seed).RegisterAsync("other@example.com", "Other");
             await seed.SaveChangesAsync();
-            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token);
-            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token);
+            await Service(seed).ConfirmEmailAsync(owner.Confirmation.Token, "long password one", "anna_style");
+            await Service(seed).ConfirmEmailAsync(other.Confirmation.Token, "long password two", "annaxstyle");
             ownerId = owner.Id;
             var wardrobe = new WardrobeService(new EfWardrobeRepository(seed));
             publicId = wardrobe.CreateItem(ownerId, "Public", ClothingCategory.Top).Id;

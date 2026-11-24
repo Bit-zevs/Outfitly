@@ -22,7 +22,7 @@ public sealed class OutfitCalendar(IOutfitCalendarStore store, IWardrobeReposito
     public void Set(Guid actor, DateOnly date, Guid outfitId, bool assigned)
     {
         if (actor == Guid.Empty) throw new UnauthorizedAccessException();
-        var outfit = wardrobe.GetOutfits().SingleOrDefault(x => x.Id == outfitId) ?? throw new KeyNotFoundException();
+        var outfit = wardrobe.FindOutfitForChange(outfitId) ?? throw new KeyNotFoundException();
         if (outfit.OwnerId != actor) throw new UnauthorizedAccessException();
         wardrobe.MarkOutfitChanged(outfit);
         var existing = store.Find(actor, date, outfitId);

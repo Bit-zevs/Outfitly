@@ -41,5 +41,6 @@ export async function saveOutfit(api, draft) {
   // Add first to avoid emptying a published/shared outfit during a replacement.
   for (const id of desired) if (!present.has(id)) await api.request(`/outfits/${draft.id}/items/${id}`, { method: 'POST' });
   for (const id of present) if (!desired.has(id)) await api.request(`/outfits/${draft.id}/items/${id}`, { method: 'DELETE' });
+  if (draft.isPublic && !actual.isPublic) await api.request(`/outfits/${draft.id}/publication`, { method: 'PATCH', body: { isPublic: true } });
   return draft.id;
 }

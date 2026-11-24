@@ -5,7 +5,8 @@ namespace Outfitly.Api.Contracts;
 
 public static class CatalogRequest
 {
-    public static ItemCatalogQuery Parse(IQueryCollection query, bool personal = false)
+    public static ItemCatalogQuery Parse(IQueryCollection query, bool personal = false, string defaultSort = "nameAsc",
+        bool itemAttributes = true)
     {
         string? Value(string name)
         {
@@ -24,8 +25,8 @@ public static class CatalogRequest
                 throw new ArgumentException("Invalid category.");
             category = Enum.Parse<ClothingCategory>(raw, true);
         }
-        return new(Value("search"), category, Value("color"), Value("sort") ?? "nameAsc", Number("page", 1), Number("pageSize", 20),
-            personal ? Value("brand") : null, personal ? Value("size") : null, personal ? Value("publication") ?? "all" : "all",
-            personal && Flag("colorMissing"), personal && Flag("brandMissing"), personal && Flag("sizeMissing"));
+        return new(Value("search"), category, Value("color"), Value("sort") ?? defaultSort, Number("page", 1), Number("pageSize", 20),
+            itemAttributes ? Value("brand") : null, itemAttributes ? Value("size") : null, personal ? Value("publication") ?? "all" : "all",
+            itemAttributes && Flag("colorMissing"), itemAttributes && Flag("brandMissing"), itemAttributes && Flag("sizeMissing"));
     }
 }

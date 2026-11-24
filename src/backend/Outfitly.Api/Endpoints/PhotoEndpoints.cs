@@ -32,6 +32,7 @@ public static class PhotoEndpoints
             await photos.UploadAsync(actor, id, stream, file.ContentType, context.RequestAborted);
             return Results.Ok(WardrobeResponses.Item(wardrobe.GetItem(actor, id), $"/api/items/{id}/photo"));
         }).RequireAuthorization(CurrentActor.PolicyName).WithMetadata(new RequestSizeLimitAttribute(PhotoService.MaxBytes + 1024 * 1024))
+            .RequireRateLimiting("photo-upload")
             .AddEndpointFilter<CommitChangesFilter>();
 
         app.MapDelete("/api/items/{id:guid}/photo", (Guid id, HttpContext context, PhotoService photos) =>
@@ -43,13 +44,13 @@ public static class PhotoEndpoints
         app.MapGet("/api/items/{id:guid}/photo", (Guid id, HttpContext context, WardrobeService service, IPhotoStore store) =>
             Read(service.GetOwnedPhoto(CurrentActor.Id(context.User), id), context, store)).RequireAuthorization(CurrentActor.PolicyName);
         app.MapGet("/api/wardrobe/items/{id:guid}/photo", (Guid id, HttpContext context, WardrobeService service, IPhotoStore store) =>
-            Read(service.GetPublicPhoto(id), context, store));
+            Read(service.GetPublicPhoto(id), context, store)).RequireRateLimiting("public-media-read");
         app.MapGet("/api/wardrobe/outfits/{id:guid}/items/{itemId:guid}/photo", (Guid id, Guid itemId, HttpContext context, WardrobeService service, IPhotoStore store) =>
-            Read(service.GetPublicOutfitPhoto(id, itemId), context, store));
+            Read(service.GetPublicOutfitPhoto(id, itemId), context, store)).RequireRateLimiting("public-media-read");
         app.MapGet("/api/shared/items/{token}/photo", (string token, HttpContext context, WardrobeService service, IPhotoStore store) =>
-            Read(service.GetSharedPhoto(token), context, store));
+            Read(service.GetSharedPhoto(token), context, store)).RequireRateLimiting("public-media-read");
         app.MapGet("/api/shared/outfits/{token}/items/{itemId:guid}/photo", (string token, Guid itemId, HttpContext context, WardrobeService service, IPhotoStore store) =>
-            Read(service.GetSharedPhoto(token, itemId), context, store));
+            Read(service.GetSharedPhoto(token, itemId), context, store)).RequireRateLimiting("public-media-read");
     }
 
     private static async Task<IResult> Read(string? key, HttpContext context, IPhotoStore store)

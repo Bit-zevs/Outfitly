@@ -36,7 +36,8 @@ public static class SocialEndpoints
             await using var stream = file.OpenReadStream();
             await avatars.UploadAsync(CurrentActor.Id(http.User), stream, file.ContentType, crop, ct);
             return Results.NoContent();
-        }).RequireAuthorization(CurrentActor.PolicyName).WithMetadata(new RequestSizeLimitAttribute(PhotoService.MaxBytes + 1024 * 1024)).AddEndpointFilter<CommitChangesFilter>();
+        }).RequireAuthorization(CurrentActor.PolicyName).WithMetadata(new RequestSizeLimitAttribute(PhotoService.MaxBytes + 1024 * 1024))
+            .RequireRateLimiting("photo-upload").AddEndpointFilter<CommitChangesFilter>();
         app.MapDelete("/api/auth/me/avatar", async (HttpContext http, AvatarService avatars, CancellationToken ct) => {
             await avatars.DeleteAsync(CurrentActor.Id(http.User), ct); return Results.NoContent();
         }).RequireAuthorization(CurrentActor.PolicyName).AddEndpointFilter<CommitChangesFilter>();

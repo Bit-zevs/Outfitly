@@ -30,12 +30,18 @@ test('month URL and selected day display current outfits with escaped names', as
   assert.match(page.html, /aria-current="date"/); assert.match(page.html, /data-calendar-remove="one"/);
 });
 test('picker excludes assigned outfits, searches and blocks duplicate saves', async t => {
-  let saves = 0; let finish; let refreshed = 0;
+  let saves = 0; let finish;
   const entries = [{ date: '2028-02-29', outfit: { id: 'one', name: 'Assigned', items: [] } }];
   const ctx = { route: parseRoute('#/calendar?month=2028-02&date=2028-02-29'), isCurrent: () => true,
     get: async path => path.startsWith('/calendar') ? entries : { items: [entries[0].outfit, { id: 'two', name: 'Вечер <test>', items: [] }], total: 2, pageSize: 20, page: 1 },
-    api: { request: async (path, options) => { saves++; assert.equal(options.method, 'PUT'); assert.equal(path, '/calendar/2028-02-29/outfits/two'); await new Promise(resolve => { finish = resolve; }); } }, refresh: () => { refreshed++; } };
+    api: { request: async (path, options) => {
+      saves++;
+      assert.equal(path, '/calendar/2028-02-29/outfits/two');
+      if (options.method === 'PUT') await new Promise(resolve => { finish = resolve; });
+      else assert.equal(options.method, 'DELETE');
+    } } };
   const page = await calendarPage(ctx); mount(t, page.html); page.bind(); document.querySelector('#calendar-add').click();
+  const grid = document.querySelector('.calendar-grid');
   await new Promise(resolve => setTimeout(resolve, 0));
   assert.equal(document.querySelectorAll('[data-calendar-pick]').length, 1);
   const search = document.querySelector('#calendar-search'); search.value = 'нет'; search.dispatchEvent(new document.defaultView.Event('input'));
@@ -47,7 +53,17 @@ test('picker excludes assigned outfits, searches and blocks duplicate saves', as
   assert.equal(document.querySelector('#calendar-search'), search);
   assert.equal(document.activeElement, search);
   const button = document.querySelector('[data-calendar-pick]'); button.click(); button.click(); assert.equal(saves, 1);
-  finish(); await new Promise(resolve => setTimeout(resolve, 0)); assert.equal(refreshed, 1);
+  finish(); await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('.calendar-grid'), grid);
+  assert.match(grid.querySelector('[aria-current]').getAttribute('aria-label'), /образов: 2/);
+  assert.equal(document.activeElement.id, 'calendar-add');
+  assert.match(document.querySelector('#calendar-status').textContent, /добавлен/);
+  document.querySelector('[data-calendar-remove="two"]').click();
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(document.querySelector('[data-calendar-remove="two"]'), null);
+  assert.equal(document.activeElement.dataset.calendarRemove, 'one');
+  assert.match(grid.querySelector('[aria-current]').getAttribute('aria-label'), /образов: 1/);
+  assert.match(document.querySelector('#calendar-status').textContent, /убран/);
 });
 test('late picker response is ignored after navigation and failed month requests propagate', async t => {
   let current = true; let resolve;

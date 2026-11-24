@@ -68,17 +68,36 @@ public sealed class EfPublicProfileQuery(OutfitlyDbContext context) : IPublicPro
     {
         filter = filter.Normalize();
         var outfits = owner is { } ownerId ? context.Outfits.AsNoTracking().Where(outfit => outfit.OwnerId == ownerId) : Outfits(null);
+        if (!owner.HasValue && filter.HasItemAttributes)
+        {
+            var matchingItems = EfItemCatalogQuery.ApplyAttributes(context.WardrobeItems.AsNoTracking(), filter).Select(item => item.Id);
+            outfits = outfits.Where(outfit => EF.Property<List<WardrobeItem>>(outfit, "_items").Any(item => matchingItems.Contains(item.Id)));
+        }
         if (filter.Search is { } search)
         {
+            var publicCatalog = !owner.HasValue;
             if (context.Database.IsNpgsql())
             {
                 var pattern = "%" + search.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
-                outfits = outfits.Where(outfit => EF.Functions.ILike(outfit.Name, pattern, "\\"));
+                outfits = outfits.Where(outfit => EF.Functions.ILike(outfit.Name, pattern, "\\") ||
+                    publicCatalog && outfit.Description != null && EF.Functions.ILike(outfit.Description, pattern, "\\"));
             }
-            else { var term = search.ToLowerInvariant(); outfits = outfits.Where(outfit => outfit.Name.ToLower().Contains(term)); }
+            else
+            {
+                var term = search.ToLowerInvariant();
+                outfits = outfits.Where(outfit => outfit.Name.ToLower().Contains(term) ||
+                    publicCatalog && outfit.Description != null && outfit.Description.ToLower().Contains(term));
+            }
         }
         var total = await outfits.CountAsync(ct);
-        var ordered = filter.Sort == "nameDesc" ? outfits.OrderByDescending(outfit => outfit.Name) : outfits.OrderBy(outfit => outfit.Name);
+        var ordered = filter.Sort switch
+        {
+            "nameDesc" => outfits.OrderByDescending(outfit => outfit.Name),
+            "newest" => outfits.OrderByDescending(outfit => outfit.CreatedAtUtc.HasValue).ThenByDescending(outfit => outfit.CreatedAtUtc),
+            "likes" => outfits.OrderByDescending(outfit => context.Set<PostInteraction>().Count(reaction => reaction.OutfitId == outfit.Id && reaction.Kind == "like")),
+            "views" => outfits.OrderByDescending(outfit => context.Set<PostInteraction>().Count(reaction => reaction.OutfitId == outfit.Id && reaction.Kind == "view")),
+            _ => outfits.OrderBy(outfit => outfit.Name)
+        };
         var selected = await ordered.ThenBy(outfit => outfit.Id).Skip((filter.Page - 1) * filter.PageSize).Take(filter.PageSize).ToArrayAsync(ct);
         return new(await ViewsAsync(selected, ct), total, filter.Page, filter.PageSize);
     }

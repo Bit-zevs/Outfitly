@@ -21,14 +21,19 @@ public sealed class EfAccountStore(OutfitlyDbContext context) : IAccountStore
     public Task<Account?> FindByPasswordResetHashAsync(string hash, CancellationToken cancellationToken) =>
         context.Accounts.SingleOrDefaultAsync(account => account.PasswordResetTokenHash == hash, cancellationToken);
 
-    public async Task RevokeSessionsAsync(Guid userId, CancellationToken cancellationToken)
+    public async Task RevokeSessionsAsync(Guid userId, DateTime now, CancellationToken cancellationToken)
     {
-        foreach (var session in await context.LoginSessions.Where(s => s.UserId == userId && !s.IsRevoked).ToListAsync(cancellationToken))
+        foreach (var session in await context.LoginSessions.Where(s => s.UserId == userId && !s.IsRevoked && s.ExpiresAtUtc > now).ToListAsync(cancellationToken))
             session.IsRevoked = true;
     }
 
-    public Task<Account?> FindByConfirmationHashAsync(string hash, CancellationToken cancellationToken) =>
-        context.Accounts.SingleOrDefaultAsync(account => account.ConfirmationTokenHash == hash, cancellationToken);
+    public Task<Account?> FindByConfirmationHashAsync(string hash, DateTime now, CancellationToken cancellationToken) =>
+        context.Accounts.SingleOrDefaultAsync(account => !account.EmailConfirmed &&
+            (account.ConfirmationTokenHash == hash && account.ConfirmationExpiresAtUtc > now ||
+                context.Set<PreviousConfirmationToken>().Any(token =>
+                    token.UserId == account.UserId && token.Hash == hash && token.ExpiresAtUtc > now)), cancellationToken);
+
+    public void Add(PreviousConfirmationToken token) => context.Add(token);
 
     public Task<Account?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken) =>
         context.Accounts.SingleOrDefaultAsync(account => account.NormalizedEmail == normalizedEmail, cancellationToken);

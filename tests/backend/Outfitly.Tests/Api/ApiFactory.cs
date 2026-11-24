@@ -22,7 +22,7 @@ namespace Outfitly.Tests.Api;
 internal sealed class ApiFactory(bool testAuthentication = true,
     Action<DbContextOptionsBuilder>? configureDatabase = null, bool frontend = false, Guid? supportAdmin = null) : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection connection = new("Data Source=:memory:;Foreign Keys=True");
+    private readonly SqliteConnection connection = new($"Data Source=outfitly-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;Foreign Keys=True");
     internal RecordingConfirmationSender Mail { get; } = new();
     internal string PhotoRoot { get; } = Path.Combine(Path.GetTempPath(), $"outfitly-photos-{Guid.NewGuid():N}");
 
@@ -49,7 +49,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
             services.RemoveAll<IDbContextOptionsConfiguration<OutfitlyDbContext>>();
             services.AddDbContext<OutfitlyDbContext>(options =>
             {
-                options.UseSqlite(connection);
+                options.UseSqlite(connection.ConnectionString);
                 configureDatabase?.Invoke(options);
             });
             if (testAuthentication)
@@ -77,7 +77,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
         await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Database.EnsureCreatedAsync();
     }
 
-    internal async Task ConfirmEmailAsync(HttpClient client, string email)
+    internal async Task ConfirmEmailAsync(HttpClient client, string email, string password, string? username = null)
     {
         using var scope = Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -85,7 +85,7 @@ internal sealed class ApiFactory(bool testAuthentication = true,
             .Select(a => (bool?)a.EmailConfirmed).SingleOrDefaultAsync();
         if (confirmed != false) return;
         await SetCsrfAsync(client);
-        (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = Mail.Emails[email.Trim()].Token })).EnsureSuccessStatusCode();
+        (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = (await Mail.WaitForAsync(email.Trim())).Token, password, username = username ?? "test_" + Guid.NewGuid().ToString("N")[..20] })).EnsureSuccessStatusCode();
     }
 
     internal async Task<HttpClient> OwnerClientAsync(Guid id)

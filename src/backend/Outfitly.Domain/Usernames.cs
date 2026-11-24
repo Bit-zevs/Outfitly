@@ -4,6 +4,10 @@ namespace Outfitly.Domain;
 
 public static class Usernames
 {
+    // Outside the public username grammar and unique across pending profiles.
+    internal static string Pending(Guid id) =>
+        "~" + Convert.ToBase64String(id.ToByteArray(bigEndian: true)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
     public static string Normalize(string username)
     {
         var value = username?.Trim().TrimStart('@').ToLowerInvariant();

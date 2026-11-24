@@ -13,9 +13,11 @@ test('development server HTTP contract', async (t) => {
   const directory = await mkdtemp(join(tmpdir(), 'outfitly-http-'));
   const root = join(directory, 'frontend');
   await mkdir(join(root, 'scripts'), { recursive: true });
+  await mkdir(join(root, 'src', 'assets'), { recursive: true });
   await mkdir(join(directory, 'frontend-private'));
   await writeFile(join(root, 'index.html'), '<h1>Wardrobe</h1>');
-  await writeFile(join(root, 'photo.png'), Buffer.from([137, 80, 78, 71]));
+  await writeFile(join(root, 'src', 'assets', 'photo.png'), Buffer.from([137, 80, 78, 71]));
+  await writeFile(join(root, 'package.json'), '{}');
   await writeFile(join(directory, 'frontend-private', 'secret.txt'), 'PRIVATE');
   await copyFile(new URL('../../src/frontend/scripts/dev.mjs', import.meta.url), join(root, 'scripts', 'dev.mjs'));
   const server = spawn(process.execPath, [join(root, 'scripts', 'dev.mjs')], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -45,9 +47,12 @@ test('development server HTTP contract', async (t) => {
     assert.equal(result.body, '<h1>Wardrobe</h1>');
   });
   await t.test('PNG assets have an image content type', async () => {
-    const response = await fetch('http://127.0.0.1:5173/photo.png');
+    const response = await fetch('http://127.0.0.1:5173/src/assets/photo.png');
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'image/png');
+  });
+  await t.test('development metadata is outside the client file allowlist', async () => {
+    assert.equal((await get('/package.json')).status, 404);
   });
   await t.test('a sibling directory sharing the root prefix is inaccessible', async () => {
     const result = await get('/../frontend-private/secret.txt');

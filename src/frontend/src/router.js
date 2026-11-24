@@ -3,10 +3,10 @@ export function parseRoute(hash = '') {
   const path = pathname || '/';
   return { path, parts: path.split('/').filter(Boolean), query: new URLSearchParams(query) };
 }
-export function catalogQuery(query) {
+export function catalogQuery(query, defaultSort = 'nameAsc') {
   const result = new URLSearchParams();
   for (const key of ['search', 'category']) if (query.get(key)) result.set(key, query.get(key));
-  result.set('sort', query.get('sort') === 'nameDesc' ? 'nameDesc' : 'nameAsc');
+  result.set('sort', ['nameAsc', 'nameDesc', 'newest', 'likes', 'views'].includes(query.get('sort')) ? query.get('sort') : defaultSort);
   result.set('page', String(Math.max(1, Number.parseInt(query.get('page'), 10) || 1)));
   result.set('pageSize', '20');
   return result;

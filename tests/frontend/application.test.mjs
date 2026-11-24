@@ -57,16 +57,16 @@ test('auth restores the server user and rotates CSRF after login and logout', as
   assert.equal(calls.filter(c => c.url.endsWith('/csrf')).length, 3);
 });
 
-test('registration sends no request until both passwords match exactly', async () => {
+test('confirmation sends no request until both passwords match exactly', async () => {
   const calls = [];
   const auth = createAuth({ async request(path, options) { calls.push({ path, ...options }); return { id: 'new-user' }; } });
   const password = ' мой длинный пароль ';
   for (const confirmation of [undefined, '', 'другой длинный пароль', password.trim()]) {
-    await assert.rejects(auth.register('Анна', 'anna@example.test', password, confirmation, 'anna'), e => e instanceof ApiError && e.status === 400 && e.message === 'Пароли не совпадают.');
+    await assert.rejects(auth.confirmEmail('token', password, confirmation, 'atelier'), e => e instanceof ApiError && e.status === 400 && e.message === 'Пароли не совпадают.');
   }
   assert.equal(calls.length, 0);
-  await auth.register('Анна', 'anna@example.test', password, password, 'anna');
-  assert.deepEqual(calls, [{ path: '/auth/register', method: 'POST', anonymous: true, body: { displayName: 'Анна', email: 'anna@example.test', password, username: 'anna' } }]);
+  await auth.confirmEmail('token', password, password, 'atelier');
+  assert.deepEqual(calls, [{ path: '/auth/confirm-email', method: 'POST', anonymous: true, body: { token: 'token', password, username: 'atelier' } }]);
   assert.equal(auth.user, null);
 });
 
@@ -204,10 +204,19 @@ test('public outfit detail combines interactions and links to its pieces', async
  assert.match(page.html,/social-panel/);assert.doesNotMatch(page.html,/linebox actions" id="workspace-actions"/);
 });
 
-test('public outfit catalog requests a bounded page and preserves search in pagination', async () => {
- const calls=[];const page=await discover({route:parseRoute('#/discover?search=walk&sort=nameDesc'),get:async path=>{calls.push(path);return{items:[{id:'look',name:'Walk',items:[]}],total:25,page:1,pageSize:20};}});
- assert.equal(calls[0],'/wardrobe/outfits?search=walk&sort=nameDesc&page=1&pageSize=20');
- assert.match(page.html,/catalog-search/);assert.match(page.html,/search=walk/);assert.match(page.html,/page=2/);
+test('public outfit catalog requests options and keeps composed filters in pagination', async () => {
+ const calls = [];
+ const page = await discover({ route: parseRoute('#/discover?search=walk&sort=nameDesc&color=red&size=m'), get: async path => {
+   calls.push(path);
+   return path.endsWith('/filter-options') ? { colors: ['red'], brands: [], sizes: ['m'] }
+     : { items: [{ id: 'look', name: 'Walk', items: [] }], total: 25, page: 1, pageSize: 20 };
+ } });
+ assert.deepEqual(calls, [
+   '/wardrobe/outfits?search=walk&sort=nameDesc&page=1&pageSize=20&color=red&size=m',
+   '/wardrobe/outfits/filter-options'
+ ]);
+ assert.match(page.html, /Фильтры по вещи в образе/);
+ assert.match(page.html, /search=walk&amp;sort=nameDesc&amp;color=red&amp;size=m&amp;page=2/);
 });
 
 test('a direct public outfit read never loads the catalog', async () => {

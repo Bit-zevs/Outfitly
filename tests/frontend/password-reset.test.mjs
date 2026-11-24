@@ -84,7 +84,7 @@ test('leaving during reset clears auth and fetches fresh CSRF for the new recove
   await recoveryForm.onsubmit({ preventDefault() {} });
   assert.equal(recoveryRequests, 1);
   assert.equal(csrfRequests, 2);
-  assert.match(document.querySelector('#reset-status').textContent, /письмо отправлено/);
+  assert.match(document.querySelector('#reset-status').textContent, /проверьте почту/);
 });
 
 test('reset commands use anonymous POST through the shared CSRF client', async () => {

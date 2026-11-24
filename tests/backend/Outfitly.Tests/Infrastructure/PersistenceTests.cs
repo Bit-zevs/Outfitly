@@ -147,7 +147,7 @@ public sealed class PersistenceTests
         service.DeleteItem(owner, item.Id);
 
         Assert.Null(service.GetSharedOutfit(link.Token));
-        Assert.Empty(new EfWardrobeRepository(context).GetAll());
+        Assert.Empty(new EfWardrobeRepository(context).FindItems());
         Assert.Empty(outfit.ItemIds);
         await context.SaveChangesAsync();
         await using var read = database.Open();

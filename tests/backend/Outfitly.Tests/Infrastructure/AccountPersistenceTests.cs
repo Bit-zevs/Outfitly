@@ -18,9 +18,9 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
-            var registered = await service.RegisterAsync("alice@example.com", password, "Alice", "alice");
+            var registered = await service.RegisterAsync("alice@example.com", "Alice");
             await write.SaveChangesAsync();
-            await service.ConfirmEmailAsync(registered.Confirmation.Token);
+            await service.ConfirmEmailAsync(registered.Confirmation.Token, password, "alice");
             (await write.Accounts.SingleAsync()).PasswordHash = oldHash;
             await write.SaveChangesAsync();
         }
@@ -49,17 +49,21 @@ public sealed class AccountPersistenceTests
         await using (var write = database.Open())
         {
             var service = new AccountService(new EfAccountStore(write), new AccountPasswordHasher(), TimeProvider.System);
+            var registered = await service.RegisterAsync("boundary@example.com", "Boundary");
+            await write.SaveChangesAsync();
+            var password = new string('a', length);
             if (accepted)
             {
-                await service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary", "boundary");
+                await service.ConfirmEmailAsync(registered.Confirmation.Token, password, "boundary");
                 await write.SaveChangesAsync();
             }
             else
                 await Assert.ThrowsAsync<ArgumentException>(() =>
-                    service.RegisterAsync("boundary@example.com", new string('a', length), "Boundary", "boundary"));
+                    service.ConfirmEmailAsync(registered.Confirmation.Token, password, "boundary"));
         }
         await using var read = database.Open();
-        Assert.Equal(accepted ? 1 : 0, await read.Users.CountAsync());
-        Assert.Equal(accepted ? 1 : 0, await read.Accounts.CountAsync());
+        var account = await read.Accounts.SingleAsync();
+        Assert.Equal(accepted, account.EmailConfirmed);
+        Assert.Equal(!accepted, string.IsNullOrEmpty(account.PasswordHash));
     }
 }

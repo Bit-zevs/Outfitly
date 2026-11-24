@@ -21,6 +21,8 @@ public sealed class Account
     public Guid SessionVersion { get; set; }
 }
 
+public sealed record PreviousConfirmationToken(string Hash, Guid UserId, DateTime ExpiresAtUtc);
+
 public sealed class LoginSession
 {
     public Guid SessionVersion { get; init; }

@@ -9,19 +9,70 @@ export function validatePhoto(file) {
   return '';
 }
 
+function requiredValidation(form, requiredFields) {
+  const requiredStatus = form.querySelector('.editor-required-status');
+  const fields = requiredFields.map(([input, message]) => {
+    const notice = document.createElement('small');
+    notice.className = 'field-error';
+    notice.id = input.id + '-required';
+    notice.textContent = message;
+    notice.hidden = true;
+    input.closest('.field').append(notice);
+    return { input, notice };
+  });
+  let checkedRequired = false;
+  function checkRequired(focus = false) {
+    const missing = fields.filter(({ input }) => !input.value.trim());
+    for (const { input, notice } of fields) {
+      const invalid = !input.value.trim();
+      notice.hidden = !invalid;
+      const descriptions = new Set((input.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+      if (invalid) {
+        input.setAttribute('aria-invalid', 'true');
+        descriptions.add(notice.id);
+      } else {
+        input.removeAttribute('aria-invalid');
+        descriptions.delete(notice.id);
+      }
+      if (descriptions.size) input.setAttribute('aria-describedby', [...descriptions].join(' '));
+      else input.removeAttribute('aria-describedby');
+    }
+    requiredStatus.textContent = missing.length ? 'Заполните отмеченные поля.' : '';
+    if (focus && missing.length) {
+      const { input, notice } = missing[0];
+      const target = input.hidden ? input.nextElementSibling?.querySelector('.choice-trigger') : input;
+      if (target && target !== input) {
+        target.setAttribute('aria-invalid', 'true');
+        target.setAttribute('aria-describedby', input.getAttribute('aria-describedby') || notice.id);
+      }
+      target?.focus();
+    }
+    return !missing.length;
+  }
+  const refresh = () => { if (checkedRequired) checkRequired(); };
+  form.addEventListener('input', refresh);
+  form.addEventListener('change', refresh);
+  return () => { checkedRequired = true; return checkRequired(true); };
+}
+
 export async function itemEditor(ctx, id) {
   const baseline = id ? await ctx.get(`/items/${id}`) : null;
   const draft = { id, baseline, photoMode: baseline?.photoUrl && !uploadedPhoto(baseline) ? 'url' : 'file', file: null, removePhoto: false, metadataSaved: false, publishOnCreate: !id };
   let previewUrl; let autosave;
   const heading = id ? 'Редактировать вещь' : 'Добавить вещь';
-  return { title: heading, html: `${crumbs('/wardrobe', 'Мой гардероб', heading)}${title('Ваша коллекция', heading, 'Начните с основных деталей. Остальное можно добавить позже.')}<form id="item-form"><div class="form-layout"><div>${field('Название', 'name', baseline?.name, { required: true })}<div class="form-grid"><div class="field"><label for="category">Категория *</label><select name="category" id="category" required><option value="">Выберите категорию</option>${Object.entries(categories).map(([key, label]) => `<option value="${key}" ${baseline?.category === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div>${choiceField('Цвет', 'color', baseline?.color, itemColors)}${choiceField('Размер', 'size', baseline?.size, itemSizes)}${field('Бренд', 'brand', baseline?.brand)}</div><div class="field"><label for="description">Описание</label><textarea id="description" name="description" rows="4">${escape(baseline?.description)}</textarea></div><fieldset class="photo-source"><legend>Фотография</legend><div class="source-options"><label><input type="radio" name="photoMode" value="file" ${draft.photoMode === 'file' ? 'checked' : ''}>С устройства</label><label><input type="radio" name="photoMode" value="url" ${draft.photoMode === 'url' ? 'checked' : ''}>По ссылке</label></div><div id="file-panel" ${draft.photoMode !== 'file' ? 'hidden' : ''}><label class="file-label" for="file">Выбрать фотографию<input id="file" type="file" accept="image/jpeg,image/png" aria-describedby="file-hint file-error"></label><small id="file-hint">JPEG или PNG, до 5 МБ</small><p id="file-name" class="muted" role="status"></p><p class="field-error" role="alert" id="file-error"></p></div><div id="url-panel" ${draft.photoMode !== 'url' ? 'hidden' : ''}>${field('Ссылка на фото', 'photoUrl', uploadedPhoto(baseline) ? '' : baseline?.photoUrl, { type: 'url', hint: 'Полный адрес, начинающийся с http:// или https://' })}</div><button type="button" class="text-button danger" id="remove-photo">Убрать фотографию</button></fieldset></div><aside class="preview-panel"><div id="photo-preview">${baseline ? photo(baseline) : photo({})}</div><p class="muted">Предварительный просмотр фотографии</p></aside>${!id ? `<fieldset class="item-visibility"><legend>Кто увидит вещь</legend><label class="check-label"><input type="radio" name="visibility" value="private" checked>Только я</label><label class="check-label"><input type="radio" name="visibility" value="public">Все пользователи</label><small>Публичная вещь появится в открытой коллекции после сохранения.</small></fieldset>` : ''}</div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="conflict-review" hidden></div><div class="footer-actions">${link(id ? `/items/${id}` : '/wardrobe', 'Отмена', 'btn outline')}<button class="btn" type="submit" id="save-item">Сохранить вещь</button></div></form>`, cleanup() { autosave?.dispose(); if (previewUrl) URL.revokeObjectURL(previewUrl); }, bind() {
+  return { title: heading, html: `${crumbs('/wardrobe', 'Мой гардероб', heading)}${title('Ваша коллекция', heading, 'Начните с основных деталей. Остальное можно добавить позже.')}<form id="item-form" novalidate><div class="form-layout"><div>${field('Название', 'name', baseline?.name, { required: true })}<div class="form-grid"><div class="field"><label for="category">Категория *</label><select name="category" id="category" required><option value="">Выберите категорию</option>${Object.entries(categories).map(([key, label]) => `<option value="${key}" ${baseline?.category === key ? 'selected' : ''}>${label}</option>`).join('')}</select></div>${choiceField('Цвет', 'color', baseline?.color, itemColors)}${choiceField('Размер', 'size', baseline?.size, itemSizes)}${field('Бренд', 'brand', baseline?.brand)}</div><div class="field"><label for="description">Описание</label><textarea id="description" name="description" rows="4">${escape(baseline?.description)}</textarea></div></div><fieldset class="photo-source"><legend>Фотография</legend><div class="source-options"><label><input type="radio" name="photoMode" value="file" ${draft.photoMode === 'file' ? 'checked' : ''}>С устройства</label><label><input type="radio" name="photoMode" value="url" ${draft.photoMode === 'url' ? 'checked' : ''}>По ссылке</label></div><div id="file-panel" ${draft.photoMode !== 'file' ? 'hidden' : ''}><label class="file-label" for="file">Выбрать фотографию<input id="file" type="file" accept="image/jpeg,image/png" aria-describedby="file-hint file-error"></label><small id="file-hint">JPEG или PNG, до 5 МБ</small><p id="file-name" class="muted" role="status"></p><p class="field-error" role="alert" id="file-error"></p></div><div id="url-panel" ${draft.photoMode !== 'url' ? 'hidden' : ''}>${field('Ссылка на фото', 'photoUrl', uploadedPhoto(baseline) ? '' : baseline?.photoUrl, { type: 'url', hint: 'Полный адрес, начинающийся с http:// или https://' })}</div><button type="button" class="text-button danger" id="remove-photo">Убрать фотографию</button></fieldset><aside class="preview-panel"><div id="photo-preview">${baseline ? photo(baseline) : photo({})}</div><p class="muted">Предварительный просмотр фотографии</p></aside>${!id ? `<fieldset class="item-visibility"><legend>Кто увидит вещь</legend><label class="publication"><span><strong>Публичный доступ</strong><small>Показывать вещь в открытой коллекции после сохранения.</small></span><input type="checkbox" role="switch" name="visibility"></label></fieldset>` : ''}</div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="conflict-review" class="save-review" hidden></div><div class="footer-actions">${link(id ? `/items/${id}` : '/wardrobe', 'Отмена', 'btn outline')}<p class="error editor-required-status" id="item-required-status" role="status"></p><button class="btn" type="submit" id="save-item">Сохранить вещь</button></div></form>`, cleanup() { autosave?.dispose(); if (previewUrl) URL.revokeObjectURL(previewUrl); }, bind() {
     const form = document.querySelector('#item-form');
     const error = document.querySelector('#form-error');
     const saveButton = document.querySelector('#save-item');
     const fileInput = form.querySelector('#file');
     const fileError = form.querySelector('#file-error');
+    const fileName = form.querySelector('#file-name');
     const clearFileError = () => { fileError.textContent = ''; fileInput.removeAttribute('aria-invalid'); };
     let locked = false;
+    const checkRequired = requiredValidation(form, [
+      [form.elements.name, 'Введите название вещи.'],
+      [form.elements.category, 'Выберите категорию.']
+    ]);
     function preview(url) {
       const target = document.querySelector('#photo-preview');
       target.replaceChildren();
@@ -31,6 +82,12 @@ export async function itemEditor(ctx, id) {
       target.append(frame);
     }
     function mode() {
+      if (!draft.file && previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+        fileInput.value = '';
+        fileName.textContent = '';
+      }
       draft.photoMode = form.elements.photoMode.value;
       document.querySelector('#file-panel').hidden = draft.photoMode !== 'file';
       document.querySelector('#url-panel').hidden = draft.photoMode !== 'url';
@@ -38,7 +95,7 @@ export async function itemEditor(ctx, id) {
       preview(draft.photoMode === 'file' ? (previewUrl || draft.restoredPhotoUrl || (!draft.removePhoto ? draft.baseline?.photoUrl : null)) : (/^https?:\/\//i.test(form.elements.photoUrl.value) ? form.elements.photoUrl.value : null));
     }
     mode();
-    form.oninput = () => { ctx.setDirty(true); autosave?.changed(); form.elements.name.setCustomValidity(''); form.elements.photoUrl.setCustomValidity(''); };
+    form.oninput = () => { ctx.setDirty(true); autosave?.changed(); form.elements.photoUrl.setCustomValidity(''); };
     form.querySelectorAll('[name="photoMode"]').forEach(input => { input.onchange = () => { clearFileError(); mode(); }; });
     form.elements.photoUrl.oninput = () => { mode(); };
     fileInput.onchange = event => {
@@ -46,10 +103,23 @@ export async function itemEditor(ctx, id) {
       if (!file) return;
       const message = validatePhoto(file);
       clearFileError();
-      if (message) { event.target.value = ''; fileInput.setAttribute('aria-invalid', 'true'); fileError.textContent = message; fileInput.focus(); return; }
+      if (message) {
+        fileInput.value = '';
+        fileName.textContent = '';
+        draft.file = null;
+        draft.restoredPhotoUrl = null;
+        draft.discardStagedPhoto = true;
+        mode();
+        ctx.setDirty(true);
+        autosave?.changed();
+        fileInput.setAttribute('aria-invalid', 'true');
+        fileError.textContent = message;
+        fileInput.focus();
+        return;
+      }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       draft.file = file; draft.removePhoto = false; previewUrl = URL.createObjectURL(file);
-      document.querySelector('#file-name').textContent = file.name;
+      fileName.textContent = file.name;
       error.hidden = true; mode(); ctx.setDirty(true); autosave?.changed();
     };
     document.querySelector('#remove-photo').onclick = () => {
@@ -62,30 +132,30 @@ export async function itemEditor(ctx, id) {
     form.onsubmit = async event => {
       event.preventDefault();
       if (locked || form.getAttribute('aria-busy') === 'true') return;
-      if (!form.elements.name.value.trim()) { form.elements.name.setCustomValidity('Введите название вещи.'); form.elements.name.reportValidity(); return; }
+      if (!checkRequired() || !form.elements.photoUrl.reportValidity()) return;
       if (draft.photoMode === 'url' && form.elements.photoUrl.value && !/^https?:\/\//i.test(form.elements.photoUrl.value)) { form.elements.photoUrl.setCustomValidity('Используйте адрес http:// или https://'); form.elements.photoUrl.reportValidity(); return; }
       draft.values = Object.fromEntries(['name', 'category', 'color', 'size', 'brand', 'description', 'photoUrl'].map(name => [name, form.elements[name].value.trim() || null]));
-      draft.isPublic = form.elements.visibility?.value === 'public';
+      draft.isPublic = Boolean(form.elements.visibility?.checked);
       error.hidden = true; busy(form, true); ctx.setSaving(true);
       try {
         if (autosave) draft.id = await autosave.save(); else await saveItem(ctx.api, draft);
         if (!ctx.isCurrent()) return;
-        ctx.setDirty(false); ctx.toast('Вещь сохранена'); ctx.navigate(`/items/${draft.id}`);
+        ctx.setDirty(false); ctx.toast('Вещь сохранена'); ctx.navigate(id ? `/items/${draft.id}` : '/wardrobe');
       } catch (failure) {
         if (!ctx.isCurrent()) return;
         showError(error, failure, draft.metadataSaved ? 'Основные данные вещи сохранены. Не все изменения применены; повторите сохранение. ' : '');
         if (draft.id && failure.status === 409) {
           locked = true;
           const review = document.querySelector('#conflict-review'); review.hidden = false;
-          review.innerHTML = '<button type="button" class="btn outline" id="review-current">Сверить актуальную вещь</button><div id="current-item"></div>';
+          review.innerHTML = '<h2>Проверьте изменения перед сохранением</h2><button type="button" class="btn outline" id="review-current">Сверить актуальную вещь</button><div id="current-item"></div>';
           document.querySelector('#review-current').onclick = async () => {
             try {
               const actual = await ctx.get(`/items/${draft.id}`);
               if (!ctx.isCurrent()) return;
               document.querySelector('#current-item').innerHTML = `<div class="linebox"><h2>Сейчас на сервере</h2><dl class="properties">${[['Название', actual.name], ['Категория', categories[actual.category]], ['Бренд', actual.brand], ['Цвет', actual.color], ['Размер', actual.size]].map(([label, value]) => `<div><dt>${escape(label)}</dt><dd>${escape(value || 'Не указан')}</dd></div>`).join('')}</dl><p>${escape(actual.description || 'Без описания')}</p>${photo(actual)}<p>Ваши поля выше сохранены в редакторе. При повторении они заменят данные на сервере.</p><button type="button" class="btn outline" id="accept-current">Я сверил данные — разрешить сохранение</button></div>`;
               draft.baseline = actual;
-              document.querySelector('#accept-current').onclick = () => { locked = false; autosave?.acceptBaseline(actual.editVersion); saveButton.disabled = false; review.hidden = true; };
-            } catch (e) { if (ctx.isCurrent()) showError(error, e); }
+              document.querySelector('#accept-current').onclick = () => { locked = false; autosave?.acceptBaseline(actual.editVersion); saveButton.disabled = false; review.hidden = true; saveButton.focus(); };
+            } catch (e) { if (ctx.isCurrent()) showError(error, e, 'Не удалось загрузить актуальную версию. Попробуйте сверить данные ещё раз. '); }
           };
         }
       } finally { if (ctx.isCurrent()) { busy(form, false); saveButton.disabled = locked; ctx.setSaving(false); autosave?.lockUncertain(); } }
@@ -100,17 +170,22 @@ export async function outfitEditor(ctx, id) {
   const heading = id ? 'Редактировать образ' : 'Создать образ';
   let searchController; let autosave;
   let searchVersion = 0;
-  return { title: heading, html: `${crumbs('/outfits', 'Мои образы', heading)}${title('Искусство сочетать', heading, 'Добавляйте вещи из своего гардероба. Сохраните пустой образ, если хотите вернуться к нему позже.')}<form id="outfit-form"><div class="editor-grid"><div class="editor-panel"><h2>Информация об образе</h2>${field('Название', 'name', initial.name, { required: true })}<div class="field"><label for="description">Описание</label><textarea name="description" id="description" rows="3">${escape(initial.description)}</textarea></div><h2 class="section-title">Вещи из гардероба</h2><div class="editor-search"><label><span class="sr-only">Найти вещь</span><input type="search" id="editor-search" placeholder="Поиск по названию"></label><label><span class="sr-only">Категория вещей</span><select id="editor-category"><option value="">Все категории</option>${Object.entries(categories).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><button type="button" class="btn outline small" id="find-items">Найти</button></div><div id="available-items" aria-live="polite"></div><div class="actions" id="editor-pagination"></div><p class="error" id="catalog-error" role="alert" hidden></p></div><div class="editor-panel composition"><div class="section-heading"><h2>Состав образа</h2><span class="muted" id="selected-count" role="status"></span></div><div id="selected-items" aria-live="polite"></div><div class="linebox"><h3>Всё начинается с сочетания</h3><p>После сохранения вы сможете опубликовать образ или поделиться им по ссылке. Для этого нужна хотя бы одна вещь.</p></div></div></div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="save-review" hidden></div><div class="footer-actions">${link(id ? `/outfits/${id}` : '/outfits', 'Отмена', 'btn outline')}<button class="btn" id="save-outfit" type="submit">Сохранить образ</button></div></form>`, cleanup() { autosave?.dispose(); searchController?.abort(); }, bind() {
+  return { title: heading, html: `${crumbs('/outfits', 'Мои образы', heading)}${title('Искусство сочетать', heading, 'Добавляйте вещи из своего гардероба. Сохраните пустой образ, если хотите вернуться к нему позже.')}<form id="outfit-form" novalidate><div class="editor-grid"><div class="editor-panel"><h2>Информация об образе</h2>${field('Название', 'name', initial.name, { required: true })}<div class="field"><label for="description">Описание</label><textarea name="description" id="description" rows="3">${escape(initial.description)}</textarea></div>${!id ? `<fieldset class="item-visibility"><legend>Кто увидит образ</legend><label class="publication"><span><strong>Публичный доступ</strong><small>Показать образ в открытой коллекции. Добавьте хотя бы одну вещь.</small></span><input type="checkbox" role="switch" name="visibility"></label></fieldset>` : ''}<div class="section-heading editor-catalog-heading"><h2>Вещи из гардероба</h2><button type="button" class="btn outline small" id="jump-to-composition" aria-controls="selected-items"></button></div><div class="editor-search"><label><span class="sr-only">Найти вещь</span><input type="search" id="editor-search" name="itemSearch" autocomplete="off" placeholder="Поиск по названию…"></label><label><span class="sr-only">Категория вещей</span><select id="editor-category"><option value="">Все категории</option>${Object.entries(categories).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label><button type="button" class="btn outline small" id="find-items">Найти</button></div><div id="available-items" aria-live="polite"></div><div class="actions" id="editor-pagination"></div><p class="error" id="catalog-error" role="alert" hidden></p></div><div class="editor-panel composition"><div class="section-heading"><h2 id="composition-heading" tabindex="-1">Состав образа</h2><span class="muted" id="selected-count" role="status"></span></div><div id="selected-items" aria-live="polite"></div></div></div><p class="error" role="alert" tabindex="-1" id="form-error" hidden></p><div id="save-review" class="save-review" hidden></div><div class="footer-actions">${link(id ? `/outfits/${id}` : '/outfits', 'Отмена', 'btn outline')}<p class="error editor-required-status" role="status"></p><button class="btn" id="save-outfit" type="submit">Сохранить образ</button></div></form>`, cleanup() { autosave?.dispose(); searchController?.abort(); }, bind() {
     const form = document.querySelector('#outfit-form');
     const error = document.querySelector('#form-error');
     const saveButton = document.querySelector('#save-outfit');
+    const checkRequired = requiredValidation(form, [[form.elements.name, 'Введите название образа.']]);
     let available = [];
     let currentPage = 1;
     let locked = false;
     const isSaving = () => form.getAttribute('aria-busy') === 'true';
+    const compositionHeading = form.querySelector('#composition-heading');
+    const jumpToComposition = form.querySelector('#jump-to-composition');
+    jumpToComposition.onclick = () => compositionHeading.focus();
     function renderSelected() {
-      document.querySelector('#selected-count').textContent = `${draft.selected.length} вещей`;
-      document.querySelector('#selected-items').innerHTML = draft.selected.length ? `<div class="selected-grid">${draft.selected.map(item => `<div class="selected-item">${photo(item, '', true)}<button class="remove-item" type="button" ${isSaving() ? 'disabled' : ''} data-remove="${escape(item.id)}" aria-label="Убрать ${escape(item.name)}">×</button><p>${escape(item.name)}</p></div>`).join('')}</div>` : '<div class="empty small-empty"><span class="empty-icon">◇</span><h3>Место для ваших сочетаний</h3><p>Добавьте вещи из гардероба.</p></div>';
+      jumpToComposition.textContent = `К составу (${draft.selected.length})`;
+      document.querySelector('#selected-count').textContent = `Выбрано: ${draft.selected.length}`;
+      document.querySelector('#selected-items').innerHTML = draft.selected.length ? `<div class="selected-grid">${draft.selected.map(item => `<div class="selected-item">${photo(item, '', true)}<button class="remove-item" type="button" ${isSaving() ? 'disabled' : ''} data-remove="${escape(item.id)}" aria-label="Убрать ${escape(item.name)}">×</button><p>${escape(item.name)}</p></div>`).join('')}</div>` : '<div class="empty small-empty"><span class="empty-icon" aria-hidden="true">◇</span><h3>Состав пока пуст</h3><p>Добавьте вещь из гардероба, чтобы опубликовать образ или поделиться ссылкой.</p></div>';
       document.querySelectorAll('[data-remove]').forEach(button => { button.onclick = () => { if (isSaving()) return; draft.selected = draft.selected.filter(i => i.id !== button.dataset.remove); ctx.setDirty(true); autosave?.changed(); renderSelected(); renderAvailable(); (document.querySelector('[data-remove]') || document.querySelector('[data-add]:not(:disabled)') || document.querySelector('#find-items')).focus({ preventScroll: true }); }; });
     }
     function renderAvailable() {
@@ -118,10 +193,12 @@ export async function outfitEditor(ctx, id) {
         const selected = draft.selected.some(i => i.id === item.id);
         return `<div class="editor-choice${selected ? ' is-selected' : ''}">${photo(item, '', true)}<div><strong>${escape(item.name)}</strong><small>${escape(categories[item.category])}${item.brand ? ` · ${escape(item.brand)}` : ''}</small></div><button class="icon-button" type="button" data-add="${escape(item.id)}" ${selected || isSaving() ? 'disabled' : ''} aria-label="${selected ? 'Уже добавлено:' : 'Добавить'} ${escape(item.name)}">${selected ? '✓' : '+'}</button></div>`;
       }).join('') : `<div class="empty small-empty"><p>Вещи не найдены.</p>${link('/items/new', 'Добавить вещь')}</div>`;
-      document.querySelectorAll('[data-add]').forEach(button => { button.onclick = () => {
+      document.querySelectorAll('[data-add]').forEach((button, index) => { button.onclick = () => {
         if (isSaving()) return;
         if (!draft.selected.some(i => i.id === button.dataset.add)) draft.selected.push(available.find(i => i.id === button.dataset.add));
         ctx.setDirty(true); autosave?.changed(); renderSelected(); renderAvailable();
+        const next = [...form.querySelectorAll('[data-add]')].slice(index + 1).find(candidate => !candidate.disabled);
+        (next || compositionHeading).focus();
       }; });
     }
     async function load(page = 1) {
@@ -145,7 +222,7 @@ export async function outfitEditor(ctx, id) {
       } catch (failure) { if (failure.name !== 'AbortError' && ctx.isCurrent() && version === searchVersion) { catalogError.hidden = false; catalogError.textContent = `${errorMessage(failure)} Нажмите «Найти», чтобы повторить.`; } }
       finally { if (ctx.isCurrent() && version === searchVersion) target.removeAttribute('aria-busy'); }
     }
-    form.oninput = event => { if (['name', 'description'].includes(event.target.name)) { ctx.setDirty(true); autosave?.changed(); form.elements.name.setCustomValidity(''); } };
+    form.oninput = event => { if (['name', 'description', 'visibility'].includes(event.target.name)) { ctx.setDirty(true); autosave?.changed(); } };
     document.querySelector('#find-items').onclick = () => load();
     document.querySelector('#editor-category').onchange = () => load();
     document.querySelector('#editor-search').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); load(); } };
@@ -153,27 +230,34 @@ export async function outfitEditor(ctx, id) {
     form.onsubmit = async event => {
       event.preventDefault();
       if (locked || form.getAttribute('aria-busy') === 'true') return;
-      if (!form.elements.name.value.trim()) { form.elements.name.setCustomValidity('Введите название образа.'); form.elements.name.reportValidity(); return; }
+      if (!checkRequired()) return;
+      draft.isPublic = Boolean(form.elements.visibility?.checked);
+      if (draft.isPublic && !draft.selected.length) {
+        error.textContent = 'Добавьте хотя бы одну вещь, чтобы опубликовать образ.';
+        error.hidden = false;
+        error.focus();
+        return;
+      }
       draft.name = form.elements.name.value.trim(); draft.description = form.elements.description.value.trim();
       error.hidden = true; busy(form, true); ctx.setSaving(true);
       try {
         if (autosave) draft.id = await autosave.save(); else await saveOutfit(ctx.api, draft);
         if (!ctx.isCurrent()) return;
-        ctx.setDirty(false); ctx.toast('Образ сохранён'); ctx.navigate(`/outfits/${draft.id}`);
+        ctx.setDirty(false); ctx.toast('Образ сохранён'); ctx.navigate(id ? `/outfits/${draft.id}` : '/outfits');
       } catch (failure) {
         if (!ctx.isCurrent()) return;
         showError(error, failure, draft.metadataSaved ? 'Образ сохранён частично. Выбранный состав остаётся в редакторе. ' : '');
         if (draft.id) {
           locked = true;
           const review = document.querySelector('#save-review'); review.hidden = false;
-          review.innerHTML = '<button class="btn outline" type="button" id="read-outfit">Сверить сохранённый образ</button><div id="actual-outfit"></div>';
+          review.innerHTML = '<h2>Проверьте изменения перед сохранением</h2><button class="btn outline" type="button" id="read-outfit">Сверить сохранённый образ</button><div id="actual-outfit"></div>';
           document.querySelector('#read-outfit').onclick = async () => {
             try {
               const actual = await ctx.get(`/outfits/${draft.id}`);
               if (!ctx.isCurrent()) return;
               document.querySelector('#actual-outfit').innerHTML = `<div class="linebox"><h2>Сейчас на сервере: ${escape(actual.name)}</h2><p>${escape(actual.description || 'Без описания')}</p><p>${actual.isPublic ? 'Опубликован' : 'Личный образ'}</p><ul>${actual.items.map(i => `<li>${escape(i.name)}</li>`).join('') || '<li>Пустой образ</li>'}</ul><p>В редакторе остался ваш выбранный состав. Повторное сохранение приведёт серверный состав к нему.</p><button class="btn outline" type="button" id="confirm-review">Я сверил данные — разрешить сохранение</button></div>`;
-              document.querySelector('#confirm-review').onclick = () => { locked = false; autosave?.acceptBaseline(actual.editVersion); saveButton.disabled = false; review.hidden = true; };
-            } catch (e) { if (ctx.isCurrent()) showError(error, e); }
+              document.querySelector('#confirm-review').onclick = () => { locked = false; autosave?.acceptBaseline(actual.editVersion); saveButton.disabled = false; review.hidden = true; saveButton.focus(); };
+            } catch (e) { if (ctx.isCurrent()) showError(error, e, 'Не удалось загрузить актуальную версию. Попробуйте сверить данные ещё раз. '); }
           };
         }
       } finally { if (ctx.isCurrent()) { busy(form, false); renderSelected(); renderAvailable(); saveButton.disabled = locked; ctx.setSaving(false); autosave?.lockUncertain(); } }

@@ -22,6 +22,8 @@ public interface IWorkspaceStore
     IQueryable<Favorite> Favorites { get; }
     IQueryable<EditorDraft> Drafts { get; }
     IQueryable<CopyReceipt> Copies { get; }
+    int ReserveCopyPhotoCapacity(Guid actor);
+    void CountCopiedPhoto(WardrobeItem item);
     void Add(Favorite x);
     void Add(EditorDraft x);
     void Add(CopyReceipt x);
@@ -30,20 +32,32 @@ public interface IWorkspaceStore
     // Force a version-checked write even when a finalized draft leaves item fields unchanged.
     void MarkItemChanged(WardrobeItem item);
 }
+public sealed class CopyCapacityExceededException : Exception;
+
 public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository wardrobe, WardrobeService commands,
     IPhotoStore files, IPhotoProcessor processor, PhotoChanges changes, TimeProvider clock)
 {
+    private const int MaxItemsPerCopy = 50;
+    private const int MaxPhotosPerCopy = 20;
+    private const int MaxCopiedPhotosPerAccount = 100;
+
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
     private static void Actor(Guid actor) { if (actor == Guid.Empty) throw new UnauthorizedAccessException(); }
     private (Guid Owner, bool Public)? Target(string kind, Guid id)
     {
         WorkspaceKinds.Validate(kind);
-        if (kind == "items") { var item = wardrobe.GetAll().SingleOrDefault(x => x.Id == id); return item is null ? null : (item.OwnerId, item.IsPublic); }
-        var outfit = wardrobe.GetOutfits().SingleOrDefault(x => x.Id == id); return outfit is null ? null : (outfit.OwnerId, outfit.IsPublic);
+        if (kind == "items") { var item = wardrobe.FindItemForChange(id); return item is null ? null : (item.OwnerId, item.IsPublic); }
+        var outfit = wardrobe.FindOutfitForChange(id); return outfit is null ? null : (outfit.OwnerId, outfit.IsPublic);
     }
-    private ShareLink? Link(string kind, Guid id, string? token = null, Guid? linkId = null) => wardrobe.GetLinks().SingleOrDefault(x =>
-        x.IsActive && x.TargetId == id && x.TargetType == (kind == "items" ? ShareTargetType.WardrobeItem : ShareTargetType.Outfit) &&
-        (token != null && x.Token == token || linkId != null && x.Id == linkId));
+    private ShareLink? Link(string kind, Guid id, string? token = null, Guid? linkId = null) => token is not null
+            ? MatchLink(wardrobe.FindActiveLink(token, TargetType(kind)), kind, id)
+            : linkId is { } saved ? MatchLink(wardrobe.FindLinkForChange(saved), kind, id) : null;
+
+    private static ShareTargetType TargetType(string kind) =>
+        kind == "items" ? ShareTargetType.WardrobeItem : ShareTargetType.Outfit;
+
+    private static ShareLink? MatchLink(ShareLink? link, string kind, Guid id) =>
+        link is { IsActive: true } && link.TargetId == id && link.TargetType == TargetType(kind) ? link : null;
     private bool Accessible(Guid actor, string kind, Guid id, string? token = null, Guid? linkId = null)
     {
         var target = Target(kind, id);
@@ -52,7 +66,7 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
     private void RequireAccess(Guid actor, string kind, Guid id, string? token)
     { Actor(actor); if (!Accessible(actor, kind, id, token)) throw new KeyNotFoundException(); }
     private void Mark(string kind, Guid id)
-    { if (kind == "outfits" && wardrobe.GetOutfits().SingleOrDefault(x => x.Id == id) is { } outfit) wardrobe.MarkOutfitChanged(outfit); }
+    { if (kind == "outfits" && wardrobe.FindOutfitForChange(id) is { } outfit) wardrobe.MarkOutfitChanged(outfit); }
     public bool IsFavorite(Guid actor, string kind, Guid id, string? token)
     { RequireAccess(actor, kind, id, token); return store.Favorites.Any(x => x.UserId == actor && x.Kind == kind && x.TargetId == id); }
     public void Favorite(Guid actor, string kind, Guid id, string? token, bool remove)
@@ -82,12 +96,12 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
         var prefix = own ? $"/api/items/" : target.Public ? "/api/wardrobe/items/" : $"/api/shared/items/";
         if (f.Kind == "items")
         {
-            var item = wardrobe.GetAll().Single(x => x.Id == f.TargetId);
+            var item = wardrobe.FindItemForChange(f.TargetId)!;
             var url = item.PhotoStorageKey == null ? item.PhotoUrl : own || target.Public ? prefix + item.Id + "/photo" : prefix + link!.Token + "/photo";
             return new(f.TargetId, f.Kind, true, item.Name, url, route);
         }
-        var outfit = wardrobe.GetOutfits().Single(x => x.Id == f.TargetId);
-        var first = wardrobe.GetAll().FirstOrDefault(x => outfit.ItemIds.Contains(x.Id));
+        var outfit = wardrobe.FindOutfitForChange(f.TargetId)!;
+        var first = wardrobe.FindItemsForChange(outfit.ItemIds).FirstOrDefault();
         string? photo = first?.PhotoUrl;
         if (first?.PhotoStorageKey != null) photo = own ? $"/api/items/{first.Id}/photo" : target.Public ? $"/api/wardrobe/outfits/{outfit.Id}/items/{first.Id}/photo" : $"/api/shared/outfits/{link!.Token}/items/{first.Id}/photo";
         return new(f.TargetId, f.Kind, true, outfit.Name, photo, route);
@@ -98,21 +112,59 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
         var previous = store.Copies.SingleOrDefault(x => x.UserId == actor && x.OperationId == operation);
         if (previous != null) { if (previous.SourceId != source) throw new ArgumentException("Operation belongs to another source."); return previous.ResultId; }
         RequireAccess(actor, "outfits", source, token);
-        var original = wardrobe.GetOutfits().Single(x => x.Id == source); wardrobe.MarkOutfitChanged(original);
+        var original = wardrobe.FindOutfitForChange(source) ?? throw new KeyNotFoundException();
+        wardrobe.MarkOutfitChanged(original);
+        var ids = original.ItemIds;
+        if (ids.Count > MaxItemsPerCopy) throw new CopyCapacityExceededException();
+        var items = wardrobe.FindItemsForChange(ids);
+        CheckCopyCapacity(actor, items.Count(item => item.PhotoStorageKey is not null));
         var copy = commands.CreateOutfit(actor, original.Name + " (копия)", original.Description);
-        foreach (var item in wardrobe.GetAll().Where(x => original.ItemIds.Contains(x.Id)).ToArray())
-        {
-            var cloned = commands.CreateItem(actor, item.Name, item.Category, item.Color, item.Size, item.Brand, item.Description, item.PhotoUrl);
-            if (item.PhotoStorageKey != null)
-            {
-                var photo = await files.ReadAsync(item.PhotoStorageKey, ct) ?? throw Conflict();
-                await using var stream = photo.Content; using var buffer = new MemoryStream(); await stream.CopyToAsync(buffer, ct);
-                var key = await files.WriteAsync(buffer.ToArray(), photo.ContentType == "image/png" ? ".png" : ".jpg", ct); changes.Created(key); cloned.SetUploadedPhoto(key);
-            }
-            copy.AddItem(cloned);
-        }
+        foreach (var item in items)
+            copy.AddItem(await CloneItemAsync(actor, item, ct));
         store.Add(new CopyReceipt(actor, operation, source, copy.Id)); return copy.Id;
     }
+    public async Task<Guid> CopyItemAsync(Guid actor, Guid source, Guid operation, string? token, Guid? publicOutfitId, CancellationToken ct)
+    {
+        Actor(actor);
+        if (operation == Guid.Empty) throw new ArgumentException("Operation id is required.");
+        var previous = store.Copies.SingleOrDefault(x => x.UserId == actor && x.OperationId == operation);
+        if (previous != null)
+        {
+            if (previous.SourceId != source) throw new ArgumentException("Operation belongs to another source.");
+            return previous.ResultId;
+        }
+        if (!Accessible(actor, "items", source, token))
+            PublicOutfitItem.Require(wardrobe, publicOutfitId, source, changing: true);
+        var item = wardrobe.FindItemForChange(source) ?? throw new KeyNotFoundException();
+        CheckCopyCapacity(actor, item.PhotoStorageKey is null ? 0 : 1);
+        var copy = await CloneItemAsync(actor, item, ct);
+        store.Add(new CopyReceipt(actor, operation, source, copy.Id));
+        return copy.Id;
+    }
+
+    private void CheckCopyCapacity(Guid actor, int photos)
+    {
+        if (photos == 0) return;
+        if (photos > MaxPhotosPerCopy || store.ReserveCopyPhotoCapacity(actor) > MaxCopiedPhotosPerAccount - photos)
+            throw new CopyCapacityExceededException();
+    }
+
+    private async Task<WardrobeItem> CloneItemAsync(Guid actor, WardrobeItem item, CancellationToken ct)
+    {
+        var cloned = commands.CreateItem(actor, item.Name, item.Category, item.Color, item.Size, item.Brand, item.Description, item.PhotoUrl);
+        if (item.PhotoStorageKey != null)
+        {
+            var photo = await files.ReadAsync(item.PhotoStorageKey, ct) ?? throw Conflict();
+            await using var stream = photo.Content;
+            var content = await PhotoService.ReadUploadAsync(stream, ct);
+            var key = await files.WriteAsync(content, photo.ContentType == "image/png" ? ".png" : ".jpg", ct);
+            changes.Created(key);
+            cloned.SetUploadedPhoto(key);
+            store.CountCopiedPhoto(cloned);
+        }
+        return cloned;
+    }
+
     private static WardrobeConcurrencyException Conflict() => new(new InvalidOperationException("Resource changed; reload before saving."));
     private EditorDraft Owned(Guid actor, Guid id)
     { Actor(actor); return store.Drafts.SingleOrDefault(x => x.Id == id && x.UserId == actor) ?? throw new KeyNotFoundException(); }
@@ -165,13 +217,13 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
     }
     public DraftView RemovePhoto(Guid actor, Guid id, Guid version)
     { var d = Owned(actor, id); Version(d, version); if (d.CompletedId.HasValue) throw Conflict(); changes.RemoveAfterCommit(d.PhotoStorageKey); d.SetPhoto(null, Now); return View(d); }
-    public Guid Save(Guid actor, Guid id, Guid version)
+    public Guid Save(Guid actor, Guid id, Guid version, Action<string?> validatePhotoUrl)
     {
         var d = Owned(actor, id); if (d.CompletedId.HasValue) return d.CompletedId.Value; Version(d, version);
         OwnTarget(actor, d.Kind, d.TargetId); var content = Content(d);
         if (d.TargetId is { } target)
         {
-            var actual = d.Kind == "items" ? ResourceVersion.For(wardrobe.GetAll().Single(x => x.Id == target)) : ResourceVersion.For(wardrobe.GetOutfits().Single(x => x.Id == target));
+            var actual = d.Kind == "items" ? ResourceVersion.For(wardrobe.FindItemForChange(target)!) : ResourceVersion.For(wardrobe.FindOutfitForChange(target)!);
             if (actual != d.BaseVersion) throw Conflict();
         }
         Guid result;
@@ -179,8 +231,9 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
         {
             if (content.Category == null) throw new ArgumentException("Category is required.");
             var url = content.PhotoMode == "url" && !string.IsNullOrWhiteSpace(content.PhotoUrl) ? content.PhotoUrl.Trim() : null;
+            validatePhotoUrl(url);
             WardrobeItem item;
-            if (d.TargetId is { } itemId) { item = wardrobe.GetAll().Single(x => x.Id == itemId); commands.UpdateItem(actor, itemId, content.Name!, content.Category.Value, content.Color, content.Size, content.Brand, content.Description, url); }
+            if (d.TargetId is { } itemId) { item = wardrobe.FindItemForChange(itemId)!; commands.UpdateItem(actor, itemId, content.Name!, content.Category.Value, content.Color, content.Size, content.Brand, content.Description, url); }
             else item = commands.CreateItem(actor, content.Name!, content.Category.Value, content.Color, content.Size, content.Brand, content.Description, url);
             if (content.PhotoMode == "file" && !content.RemovePhoto && d.PhotoStorageKey != null)
             { changes.RemoveAfterCommit(item.PhotoStorageKey); item.SetUploadedPhoto(d.PhotoStorageKey); }
@@ -193,11 +246,12 @@ public sealed class WorkspaceService(IWorkspaceStore store, IWardrobeRepository 
         else
         {
             Outfit outfit;
-            if (d.TargetId is { } outfitId) { outfit = wardrobe.GetOutfits().Single(x => x.Id == outfitId); commands.UpdateOutfit(actor, outfitId, content.Name!, content.Description); }
+            if (d.TargetId is { } outfitId) { outfit = wardrobe.FindOutfitForChange(outfitId)!; commands.UpdateOutfit(actor, outfitId, content.Name!, content.Description); }
             else outfit = commands.CreateOutfit(actor, content.Name!, content.Description);
             var desired = (content.ItemIds ?? []).Distinct().ToArray();
             foreach (var itemId in desired.Except(outfit.ItemIds).ToArray()) commands.AddItemToOutfit(actor, outfit.Id, itemId);
             foreach (var itemId in outfit.ItemIds.Except(desired).ToArray()) commands.RemoveItemFromOutfit(actor, outfit.Id, itemId);
+            if (!d.TargetId.HasValue && content.IsPublic) commands.SetPublication(actor, ShareTargetType.Outfit, outfit.Id, true);
             changes.RemoveAfterCommit(d.PhotoStorageKey); result = outfit.Id;
         }
         d.Complete(result, Now); return result;

@@ -98,7 +98,7 @@ test('the real outfit editor uses one atomic draft finalization instead of legac
   const writes = [], navigations = [];
   const ctx = { drafts: createDraftSession, isCurrent: () => true, setDirty() {}, setSaving() {}, toast() {}, navigate: path => navigations.push(path),
     api: { async request(path, options = {}) {
-      if (path.startsWith('/items?')) return { items: [], total: 0, page: 1, pageSize: 8 };
+      if (path.startsWith('/items?')) return { items: [{ id: 'shirt', name: 'Shirt', category: 'Top' }], total: 1, page: 1, pageSize: 8 };
       if (path.startsWith('/drafts/active')) return { draft: null };
       writes.push([path, options]);
       if (path.endsWith('/save')) return { id: 'saved' };
@@ -106,9 +106,17 @@ test('the real outfit editor uses one atomic draft finalization instead of legac
     } }
   };
   const page = await outfitEditor(ctx); document.querySelector('main').innerHTML = page.html; page.bind(); t.after(() => page.cleanup()); await flush();
-  const form = document.querySelector('#outfit-form'); form.elements.name.value = 'My outfit'; await form.onsubmit({ preventDefault() {} }); await flush();
+  const form = document.querySelector('#outfit-form');
+  await form.onsubmit({ preventDefault() {} });
+  assert.equal(form.elements.name.getAttribute('aria-invalid'), 'true');
+  assert.equal(form.elements.visibility.checked, false);
+  form.elements.name.value = 'My outfit';
+  form.elements.visibility.checked = true;
+  document.querySelector('[data-add]').click();
+  await form.onsubmit({ preventDefault() {} }); await flush();
   assert.equal(writes.length, 2); assert.ok(writes[0][0].startsWith('/drafts/')); assert.ok(writes[1][0].endsWith('/save'));
-  assert.deepEqual(navigations, ['/outfits/saved']);
+  assert.equal(writes[0][1].body.content.isPublic, true);
+  assert.deepEqual(navigations, ['/outfits']);
 });
 
 test('an uploaded draft photo survives switching URL mode off again and is not shared with the resource early', async t => {
@@ -138,7 +146,7 @@ test('uncertain finalization locks the editor until the receipt is checked, pres
   }, { ctx: { navigate: path => navigated.push(path) } });
   await flush(); state.form.elements.name.value = 'Submitted'; await assert.rejects(state.session.save()); state.session.lockUncertain();
   assert.equal(state.form.elements.name.disabled, true); assert.equal(document.querySelector('[data-retry]').disabled, false);
-  document.querySelector('[data-retry]').click(); await flush(); assert.deepEqual(navigated, ['/outfits/saved']);
+  document.querySelector('[data-retry]').click(); await flush(); assert.deepEqual(navigated, ['/outfits']);
 });
 
 

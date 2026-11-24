@@ -13,6 +13,17 @@ public sealed class EfWorkspaceStore(OutfitlyDbContext db) : IWorkspaceStore
     public void Add(CopyReceipt x) => db.Add(x);
     public void Remove(Favorite x) => db.Remove(x);
     public void Remove(EditorDraft x) => db.Remove(x);
+    public int ReserveCopyPhotoCapacity(Guid actor)
+    {
+        var user = db.Users.Find(actor) ?? throw new UnauthorizedAccessException();
+        // Competing reservations use the same original revision. A loser rolls back all clones.
+        db.Entry(user).Property<Guid>("CopyRevision").CurrentValue = Guid.NewGuid();
+        return db.WardrobeItems.Count(item => item.OwnerId == actor && EF.Property<bool>(item, "HasCopiedPhoto"));
+    }
+
+    public void CountCopiedPhoto(WardrobeItem item) =>
+        db.Entry(item).Property<bool>("HasCopiedPhoto").CurrentValue = true;
+
     public void MarkItemChanged(WardrobeItem item)
     {
         var entry = db.Entry(item);

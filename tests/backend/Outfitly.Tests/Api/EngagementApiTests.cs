@@ -25,7 +25,7 @@ public sealed class EngagementApiTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsync($"/api/items/{id}/views", null)).StatusCode);
         await ApiFactory.SetCsrfAsync(guest);
         (await guest.PostAsJsonAsync("/api/auth/register", new { email = "pending@example.com", username = "pending", displayName = "Pending", password = "long password 123" })).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.Forbidden, (await guest.PostAsJsonAsync("/api/auth/login", new { email = "pending@example.com", password = "long password 123" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PostAsJsonAsync("/api/auth/login", new { email = "pending@example.com", password = "long password 123" })).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await guest.PutAsync($"/api/items/{id}/like", null)).StatusCode);
         using var viewer = await Register(factory, "viewer");
         viewer.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
@@ -76,7 +76,7 @@ public sealed class EngagementApiTests
         Assert.Equal(HttpStatusCode.NotFound, (await visitor.GetAsync(basePath + "/engagement")).StatusCode);
         if (outfit) Assert.Equal(HttpStatusCode.NotFound, (await visitor.GetAsync($"/api/items/{itemId}/engagement" + token)).StatusCode);
         var root = await Add(visitor, basePath + "/comments" + token, "  hello  ");
-        var reply = await Add(owner, basePath + "/comments", "reply", root);
+        var reply = await Add(owner, basePath + "/comments" + token, "reply", root);
         Assert.Equal(HttpStatusCode.BadRequest, (await visitor.PostAsJsonAsync(basePath + "/comments" + token, new { text = "nested", parentId = reply })).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await visitor.PostAsJsonAsync(basePath + "/comments" + token, new { text = new string('a', 2001) })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PatchAsJsonAsync(basePath + $"/comments/{root}" + token, new { text = "hijack" })).StatusCode);
@@ -84,14 +84,14 @@ public sealed class EngagementApiTests
         var comments = await visitor.GetFromJsonAsync<PublicPage<CommentView>>(basePath + "/comments" + token);
         Assert.Equal("<script>edited</script>", Assert.Single(comments!.Items).Text);
         Assert.NotNull(Assert.Single(comments.Items).UpdatedAt);
-        (await owner.DeleteAsync(basePath + $"/comments/{root}")).EnsureSuccessStatusCode();
+        (await owner.DeleteAsync(basePath + $"/comments/{root}" + token)).EnsureSuccessStatusCode();
         var deleted = Assert.Single((await visitor.GetFromJsonAsync<PublicPage<CommentView>>(basePath + "/comments" + token))!.Items);
         Assert.True(deleted.IsDeleted); Assert.Null(deleted.Text);
         Assert.Single((await visitor.GetFromJsonAsync<PublicPage<CommentView>>(basePath + "/comments" + token + "&parentId=" + root))!.Items);
         (await owner.DeleteAsync("/api/share-links/" + linkData.GetProperty("id").GetGuid())).EnsureSuccessStatusCode();
         Assert.Equal(HttpStatusCode.NotFound, (await visitor.GetAsync(basePath + "/comments" + token)).StatusCode);
         (await owner.PatchAsJsonAsync(basePath + "/publication", new { isPublic = true })).EnsureSuccessStatusCode();
-        Assert.Equal(1, (await visitor.GetFromJsonAsync<EngagementView>(basePath + "/engagement"))!.Comments);
+        Assert.Equal(0, (await visitor.GetFromJsonAsync<EngagementView>(basePath + "/engagement"))!.Comments);
         (await owner.DeleteAsync(basePath)).EnsureSuccessStatusCode();
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -157,7 +157,7 @@ public sealed class EngagementApiTests
     {
         var client = factory.CreateClient(); await ApiFactory.SetCsrfAsync(client);
         (await client.PostAsJsonAsync("/api/auth/register", new { email = name + "@example.com", username = name, displayName = name, password = "long password 123" })).EnsureSuccessStatusCode();
-        await factory.ConfirmEmailAsync(client, name + "@example.com");
+        await factory.ConfirmEmailAsync(client, name + "@example.com", "long password 123", name);
         (await client.PostAsJsonAsync("/api/auth/login", new { email = name + "@example.com", password = "long password 123" })).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(client); return client;
     }

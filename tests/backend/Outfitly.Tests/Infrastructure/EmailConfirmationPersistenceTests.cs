@@ -34,7 +34,7 @@ public sealed class EmailConfirmationPersistenceTests
         string token;
         await using (var register = open())
         {
-            token = (await Service(register, clock).RegisterAsync("race@example.com", "a race test password", "Race", "race")).Confirmation.Token;
+            token = (await Service(register, clock).RegisterAsync("race@example.com", "Race")).Confirmation.Token;
             await register.SaveChangesAsync();
         }
         clock.Now = clock.Now.AddSeconds(60);
@@ -44,18 +44,19 @@ public sealed class EmailConfirmationPersistenceTests
         var secondService = Service(second, clock);
         ConfirmationEmail? replacement = null;
         if (firstResend) replacement = await firstService.ResendConfirmationAsync("race@example.com");
-        else await firstService.ConfirmEmailAsync(token);
+        else await firstService.ConfirmEmailAsync(token, "a race test password", "race");
         if (secondResend) await secondService.ResendConfirmationAsync("race@example.com");
-        else await secondService.ConfirmEmailAsync(token);
+        else await secondService.ConfirmEmailAsync(token, "a race test password", "race");
         await first.SaveChangesAsync();
         await Assert.ThrowsAsync<WardrobeConcurrencyException>(() => second.SaveChangesAsync());
         await using var read = open();
         Assert.Equal(!firstResend, (await read.Accounts.SingleAsync()).EmailConfirmed);
         if (firstResend)
         {
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(token));
-            await Service(read, clock).ConfirmEmailAsync(replacement!.Token);
+            await Service(read, clock).ConfirmEmailAsync(token, "a race test password", "race");
             await read.SaveChangesAsync();
+            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() =>
+                Service(read, clock).ConfirmEmailAsync(replacement!.Token, "an expiry test password", "race"));
         }
     }
 
@@ -67,16 +68,16 @@ public sealed class EmailConfirmationPersistenceTests
         RegisteredAccount account;
         await using (var register = database.Open())
         {
-            account = await Service(register, clock).RegisterAsync("expiry@example.com", "an expiry test password", "Expiry", "expiry");
+            account = await Service(register, clock).RegisterAsync("expiry@example.com", "Expiry");
             await register.SaveChangesAsync();
         }
         clock.Now = clock.Now.AddHours(24);
         await using (var expired = database.Open())
         {
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(expired, clock).ConfirmEmailAsync(account.Confirmation.Token));
+            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(expired, clock).ConfirmEmailAsync(account.Confirmation.Token, "an expiry test password", "expiry"));
             var replacement = await Service(expired, clock).ResendConfirmationAsync(account.Email);
             await expired.SaveChangesAsync();
-            await Service(expired, clock).ConfirmEmailAsync(replacement!.Token);
+            await Service(expired, clock).ConfirmEmailAsync(replacement!.Token, "an expiry test password", "expiry");
             await expired.SaveChangesAsync();
             var login = await Service(expired, clock).LoginAsync(account.Email, "an expiry test password");
             await expired.SaveChangesAsync();

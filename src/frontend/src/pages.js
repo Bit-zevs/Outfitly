@@ -1,12 +1,11 @@
-import { wardrobeQuery, wardrobeFilters, bindWardrobeFilters } from './wardrobe-filters.js';
+import { activeWardrobeFilters, publicCollectionQuery, wardrobeQuery, wardrobeFilters, bindWardrobeFilters } from './wardrobe-filters.js';
 import { bindWorkspaceActions } from './workspace.js';
 import { avatar } from './components.js';
 import { bindEngagement } from './engagement.js';
 
 import { peoplePage, copyAddress, profilePage } from './profiles.js';
 import { ApiError } from './api.js';
-import { passwordConfirmationError } from './auth.js';
-import { badge, categories, collage, crumbs, empty, escape, field, filters, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
+import { categories, collage, crumbs, empty, escape, field, outfitSearch, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
 import { catalogQuery, changedFilter, safeReturn, shareAddress, profilePath, publicPath } from './router.js';
 import { busy, confirmAction, modal, showError } from './ui.js';
 
@@ -17,54 +16,36 @@ export function home(ctx) {
 export function authPage(ctx, register) {
   const { route } = ctx;
   const returnTo = route.query.get('return');
-  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><h1>${register ? 'Создать аккаунт' : 'Войти'}</h1><p class="lead">${register ? 'Пространство для ваших вещей и образов.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) + field('@username', 'username', '', { required: true, autocomplete: 'username', max: 31, hint: '3–30 символов: латиница, цифры и _. Начните с буквы.' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: register ? 'new-password' : 'current-password', min: register ? 8 : '', max: 128, hint: register ? 'От 8 до 128 символов. Можно использовать пробелы.' : '' })}${register ? `${field('Повторите пароль', 'passwordConfirmation', '', { type: 'password', required: true, autocomplete: 'new-password', max: 128 })}<p id="password-match-error" class="field-error" role="status" hidden></p>` : ''}<label class="check-label"><input type="checkbox" id="show-password">${register ? 'Показать пароли' : 'Показать пароль'}</label><p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт' : 'Войти'}</button></form>${!register ? link('/forgot-password', 'Забыли пароль?') : ''}<p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
+  return { title: register ? 'Регистрация' : 'Вход', html: `<section class="auth-grid"><div class="auth-art"><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt="Гардероб в натуральных оттенках"><p>${register ? 'Ваш стиль.<br>Ваша коллекция.' : 'Хороший стиль<br>начинается здесь.'}</p></div><div class="auth-form"><h1>${register ? 'Создать аккаунт' : 'Войти'}</h1><p class="lead">${register ? 'Задайте ник и пароль после перехода по ссылке из письма.' : 'Войдите, чтобы продолжить собирать любимые сочетания.'}</p><form id="auth-form">${register ? field('Ваше имя', 'displayName', '', { required: true, autocomplete: 'name' }) : ''}${field('Email', 'email', route.query.get('email') || '', { type: 'email', required: true, autocomplete: 'email', max: 254 })}${register ? '' : `${field('Пароль', 'password', '', { type: 'password', required: true, autocomplete: 'current-password', max: 128 })}<label class="check-label"><input type="checkbox" id="show-password">Показать пароль</label>`}<p id="form-error" class="error" role="alert" tabindex="-1" hidden></p><button class="btn full" type="submit">${register ? 'Создать аккаунт' : 'Войти'}</button></form>${!register ? link('/forgot-password', 'Забыли пароль?') : ''}<p class="auth-foot">${register ? 'Уже есть аккаунт?' : 'Нет аккаунта?'} ${link(`/${register ? 'login' : 'register'}${returnTo ? `?return=${encodeURIComponent(returnTo)}` : ''}`, register ? 'Войти' : 'Зарегистрироваться')}</p></div></section>`, bind() {
     const form = document.querySelector('#auth-form');
-    if (register) form.elements.passwordConfirmation.setAttribute('aria-describedby', 'password-match-error');
-    document.querySelector('#show-password').onchange = event => {
-      const type = event.target.checked ? 'text' : 'password';
-      form.elements.password.type = type;
-      if (register) form.elements.passwordConfirmation.type = type;
+    if (!register) document.querySelector('#show-password').onchange = ({ target }) => {
+      form.elements.password.type = target.checked ? 'text' : 'password';
     };
-    function validateConfirmation(show = false) {
-      if (!register) return true;
-      const confirmation = form.elements.passwordConfirmation;
-      const message = passwordConfirmationError(form.elements.password.value, confirmation.value);
-      confirmation.setCustomValidity(message);
-      confirmation.setAttribute('aria-invalid', String(Boolean(message && (show || confirmation.value))));
-      const notice = document.querySelector('#password-match-error');
-      notice.hidden = !message || (!show && !confirmation.value);
-      notice.textContent = message;
-      return !message;
-    }
     form.onsubmit = async event => {
       event.preventDefault();
       if (form.getAttribute('aria-busy') === 'true') return;
       const values = Object.fromEntries(new FormData(form));
       if (register && !values.displayName.trim()) { form.elements.displayName.setCustomValidity('Введите имя.'); form.elements.displayName.reportValidity(); return; }
-      if (!validateConfirmation(true)) { form.elements.passwordConfirmation.reportValidity(); return; }
       busy(form, true);
       document.querySelector('#form-error').hidden = true;
       try {
         if (register) {
-          const result = await ctx.auth.register(values.displayName, values.email, values.password, values.passwordConfirmation, values.username);
+          await ctx.auth.register(values.displayName, values.email);
           if (!ctx.isCurrent()) return;
-          ctx.navigate(`/check-email?email=${encodeURIComponent(values.email)}&sent=${result.confirmationEmailSent ? '1' : '0'}${returnTo ? `&return=${encodeURIComponent(returnTo)}` : ''}`);
+          ctx.navigate(`/check-email?email=${encodeURIComponent(values.email)}${returnTo ? `&return=${encodeURIComponent(returnTo)}` : ''}`);
         } else {
           await ctx.auth.login(values.email, values.password);
           if (ctx.isCurrent()) ctx.navigate(safeReturn(returnTo));
         }
       } catch (error) {
         if (!ctx.isCurrent()) return;
-        if (!register && error.problem?.code === 'email_not_confirmed') ctx.navigate(`/check-email?email=${encodeURIComponent(values.email)}${returnTo ? `&return=${encodeURIComponent(returnTo)}` : ''}`);
-        else if (!register && error.status === 401) showError(document.querySelector('#form-error'), new ApiError(400), 'Email или пароль неверны. ');
-        else if (register && error.status === 409) { const el = document.querySelector('#form-error'); el.hidden = false; el.textContent = error.problem?.code === 'username_taken' ? 'Этот @username уже занят. Выберите другой.' : 'Этот email уже зарегистрирован. Войдите в аккаунт.'; el.focus(); }
+        if (!register && error.status === 401) showError(document.querySelector('#form-error'), new ApiError(400), 'Email или пароль неверны. ');
         else showError(document.querySelector('#form-error'), error);
       } finally { busy(form, false); }
     };
     form.oninput = event => {
       if (!register) return;
       form.elements.displayName.setCustomValidity('');
-      if (['password', 'passwordConfirmation'].includes(event.target.name)) validateConfirmation();
     };
   } };
 }
@@ -74,30 +55,78 @@ export async function dashboard(ctx) {
   return { title: 'Обзор', html: `${title('Ваше пространство', `Здравствуйте, ${ctx.auth.user.displayName}`, 'Всё, что нужно для вашего следующего образа.')}<div class="stats">${[[items.total, 'вещей в гардеробе', '/wardrobe'], [outfits.outfits, 'собранных образов', '/outfits'], [outfits.publicOutfits, 'опубликованных образов', '/outfits']].map(([number, label, path]) => `<a href="#${path}" class="stat"><span><strong>${number}</strong><span>${label}</span></span><span aria-hidden="true">↗</span></a>`).join('')}</div><h2 class="section-title">Быстрые действия</h2><div class="quick-grid"><a href="#/items/new" class="quick-card"><div><h3>Добавить вещь</h3></div><img width="800" height="1000" loading="lazy" src="./src/assets/shirt-large.webp" alt=""></a><a href="#/outfits/new" class="quick-card"><div><h3>Создать образ</h3></div><img width="800" height="1000" loading="lazy" src="./src/assets/outfit-business.webp" alt=""></a></div><div class="section-heading"><h2>Ваша коллекция</h2>${link('/wardrobe', 'Все вещи')}</div>${items.items.length ? `<div class="cards">${items.items.map(i => itemCard(i)).join('')}</div>` : empty('Гардероб начинается с одной вещи', 'Добавьте то, что любите носить.', link('/items/new', 'Добавить вещь', 'btn'))}` };
 }
 
-export function bindFilters(ctx) {
-  document.querySelectorAll('[data-category]').forEach(button => { button.onclick = () => ctx.navigate(changedFilter(ctx.route, 'category', button.dataset.category)); });
+function bindOutfitSearch(ctx) {
   const form = document.querySelector('#catalog-search');
-  if (!form) return;
   form.onsubmit = event => { event.preventDefault(); ctx.navigate(changedFilter(ctx.route, 'search', form.elements.search.value.trim())); };
   form.elements.sort.onchange = () => ctx.navigate(changedFilter(ctx.route, 'sort', form.elements.sort.value));
 }
 
+function catalogResults(route, page, results) {
+  return `<div class="catalog-update sr-only" data-catalog-update data-result-message="Найдено: ${page.total}" role="status"></div><div data-catalog-results>${results}${pagination(route, page)}</div>`;
+}
+
+async function catalogOptions(ctx, path) {
+  try { return await ctx.get(path); }
+  catch { return null; }
+}
+
 export async function wardrobe(ctx) {
-  const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(ctx.route.query)}`), ctx.get('/items/filter-options')]);
-  return { title: 'Мой гардероб', html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${wardrobeFilters(ctx.route, options, page.total)}${page.items.length ? `<div class="cards">${page.items.map(i => itemCard(i)).join('')}</div>` : (ctx.route.query.size ? empty('Ничего не найдено', 'Измените условия поиска или сбросьте фильтры.', link('/wardrobe', 'Сбросить фильтры', 'btn outline')) : empty('Гардероб начинается с одной вещи', 'Добавьте любимую одежду, чтобы собирать из неё образы.', link('/items/new', 'Добавить вещь', 'btn')))}${pagination(ctx.route, page)}`, bind: () => bindWardrobeFilters(ctx) };
+  const { route } = ctx;
+  const optionsPath = '/items/filter-options';
+  const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(route.query)}`), catalogOptions(ctx, optionsPath)]);
+  const results = page.items.length ? `<h2 class="sr-only">Вещи в гардеробе</h2><div class="cards">${page.items.map(item => itemCard(item)).join('')}</div>`
+    : activeWardrobeFilters(route.query).length
+      ? empty('Ничего не найдено', 'Измените условия поиска или нажмите «Сбросить фильтры» выше.')
+      : empty('Гардероб начинается с одной вещи', 'Добавьте любимую одежду, чтобы собирать из неё образы.', link('/items/new', 'Добавить вещь', 'btn'));
+  return {
+    title: 'Мой гардероб',
+    html: `${title('Личная коллекция', 'Мой гардероб', 'Любимые вещи — всегда под рукой.', link('/items/new', '＋ Добавить вещь', 'btn'))}${wardrobeFilters(route, options, page.total)}${catalogResults(route, page, results)}`,
+    bind: () => bindWardrobeFilters(ctx, optionsPath)
+  };
 }
 
 export async function outfitsPage(ctx) {
-  const page = await ctx.get(`/outfits?${catalogQuery(ctx.route.query)}`);
-  return { title: 'Мои образы', html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${filters(ctx.route, page, true)}${page.items.length ? `<div class="outfit-grid">${page.items.map(o => outfitCard(o)).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline')) : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'))}${pagination(ctx.route, page)}`, bind: () => bindFilters(ctx) };
+  const { route } = ctx;
+  const page = await ctx.get(`/outfits?${catalogQuery(route.query)}`);
+  const results = page.items.length ? `<h2 class="sr-only">Образы в гардеробе</h2><div class="outfit-grid">${page.items.map(outfit => outfitCard(outfit)).join('')}</div>`
+    : route.query.get('search')
+      ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline'))
+      : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'));
+  return {
+    title: 'Мои образы',
+    html: `${title('Искусство сочетать', 'Мои образы', 'Комплекты для ваших планов и настроения.', link('/outfits/new', '＋ Создать образ', 'btn'))}${outfitSearch(route, page)}${catalogResults(route, page, results)}`,
+    bind: () => bindOutfitSearch(ctx)
+  };
 }
 
 export async function discover(ctx) {
-  if (ctx.route.query.get('tab') === 'people') return peoplePage(ctx);
-  const itemsTab = ctx.route.query.get('tab') === 'items';
-  const data = await ctx.get(itemsTab ? `/wardrobe?${catalogQuery(ctx.route.query)}` : `/wardrobe/outfits?${catalogQuery(ctx.route.query)}`);
-  const query = new URLSearchParams(ctx.route.query); query.set('tab', 'items');
-  return { title: 'Открытая коллекция', html: `<section class="discover-intro"><div><h1>Открытая коллекция</h1><p class="lead">Вещи и образы сообщества Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section><div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link('/discover', 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${query}`, 'Вещи', itemsTab ? 'selected' : '')}</nav></div>${itemsTab ? `${filters(ctx.route, data)}${data.items.length ? `<div class="cards">${data.items.map(i => itemCard(i, '/public/items')).join('')}</div>` : ctx.route.query.get('search') || ctx.route.query.get('category') ? empty('Ничего не найдено', 'Попробуйте другую категорию или измените поиск.', link('/discover?tab=items', 'Сбросить фильтры', 'btn outline')) : empty('Публичных вещей пока нет', 'Здесь появятся вещи, которыми поделятся пользователи.')}${pagination(ctx.route, data)}` : `${filters(ctx.route, data, true)}${data.items.length ? `<div class="outfit-grid">${data.items.map(o => outfitCard(o, '/public/outfits')).join('')}</div>` : ctx.route.query.get('search') ? empty('Образы не найдены', 'Измените поисковый запрос или сбросьте фильтры.', link('/discover', 'Сбросить фильтры', 'btn outline')) : empty('Публичных образов пока нет', 'В открытой коллекции появятся образы, которыми поделятся пользователи.')}${pagination(ctx.route, data)}`}`, bind: () => bindFilters(ctx) };
+  const { route } = ctx;
+  if (route.query.get('tab') === 'people') return peoplePage(ctx);
+  const itemsTab = route.query.get('tab') === 'items';
+  const endpoint = itemsTab ? '/wardrobe' : '/wardrobe/outfits';
+  const optionsPath = `${endpoint}/filter-options`;
+  const [data, options] = await Promise.all([
+    ctx.get(`${endpoint}?${publicCollectionQuery(route.query)}`),
+    catalogOptions(ctx, optionsPath)
+  ]);
+  const tabs = new URLSearchParams(route.query);
+  tabs.delete('tab');
+  tabs.delete('page');
+  const outfitsPath = tabs.size ? `/discover?${tabs}` : '/discover';
+  tabs.set('tab', 'items');
+  const results = data.items.length
+    ? itemsTab ? `<h2 class="sr-only">Публичные вещи</h2><div class="cards">${data.items.map(item => itemCard(item, '/public/items')).join('')}</div>`
+      : `<h2 class="sr-only">Публичные образы</h2><div class="outfit-grid">${data.items.map(outfit => outfitCard(outfit, '/public/outfits')).join('')}</div>`
+    : activeWardrobeFilters(route.query, false).length
+      ? empty(itemsTab ? 'Вещи не найдены' : 'Образы не найдены', 'Измените запрос или сбросьте фильтры.')
+      : empty(itemsTab ? 'Публичных вещей пока нет' : 'Публичных образов пока нет', 'Здесь появятся публикации сообщества.');
+  return {
+    title: 'Открытая коллекция',
+    html: `<section class="discover-intro"><div><h1>Открытая коллекция</h1><p class="lead">Вещи и образы сообщества Outfitly.</p></div><img width="800" height="1000" src="./src/assets/hero-rack.webp" alt=""></section>
+      <div class="public-head"><nav class="tabs" aria-label="Тип коллекции">${link(outfitsPath, 'Образы', !itemsTab ? 'selected' : '')}${link(`/discover?${tabs}`, 'Вещи', itemsTab ? 'selected' : '')}</nav></div>
+      ${wardrobeFilters(route, options, data.total)}${catalogResults(route, data, results)}`,
+    bind: () => bindWardrobeFilters(ctx, optionsPath)
+  };
 }
 
 async function publicResource(ctx, kind, id) {
@@ -120,29 +149,42 @@ export async function detail(ctx, kind, id, access = 'owner', username = null, e
   const resource = embedded ? embedded.resource : username ? await ctx.get(`/users/${encodeURIComponent(username)}/${kind}/${encodeURIComponent(id)}`) : access === 'shared' ? await ctx.get(`/shared/${kind}/${encodeURIComponent(id)}`) : owner ? await ctx.get(`/${kind}/${id}`) : await publicResource(ctx, kind, id);
   const back = embedded ? embedded.back : owner ? (item ? '/wardrobe' : '/outfits') : username ? `${profilePath(username)}${item ? '' : '?tab=outfits'}` : '/discover';
   const backText = embedded ? embedded.name : owner ? (item ? 'Мой гардероб' : 'Мои образы') : 'Открытая коллекция';
-  return { title: resource.name, html: `${crumbs(back, backText, resource.name)}<section class="detail"><div>${item ? photo(resource, 'detail-photo') : `<div class="detail-collage">${collage(resource)}</div><h2 class="section-title">Вещи в образе</h2><div class="pieces">${resource.items.map(i => owner ? `<a href="#/items/${escape(i.id)}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>` : `<a href="#/${access === 'shared' ? 'shared' : 'public'}/outfits/${escape(id)}/items/${escape(i.id)}${username ? `?username=${encodeURIComponent(username)}` : ''}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>`).join('')}</div>`}</div><div class="detail-description"><div class="detail-meta"><p class="eyebrow">${item ? `Вещь / ${escape(categories[resource.category])}` : 'Ваш готовый комплект'}${access === 'shared' ? ' / По ссылке' : ''}</p>${owner ? badge(resource.isPublic) : `<span class="badge">${embedded ? 'Вещь из образа' : access === 'shared' ? 'Просмотр по ссылке' : 'Открытая коллекция'}</span>`}</div><h1>${escape(resource.name)}</h1>${resource.ownerUsername ? `<p class="author-line">${avatar({ username: resource.ownerUsername, avatarUrl: resource.ownerAvatarUrl })}${link(profilePath(resource.ownerUsername), `@${resource.ownerUsername}`)}</p>` : ''}<dl class="properties">${(item ? [['Категория', categories[resource.category]], ['Бренд', resource.brand], ['Размер', resource.size], ['Цвет', resource.color]] : [['Состав', `${resource.items.length} вещей`]]).map(([k, v]) => `<div><dt>${escape(k)}</dt><dd>${escape(v || 'Не указан')}</dd></div>`).join('')}</dl><h2 class="eyebrow">${item ? 'О вещи' : 'Об образе'}</h2><p class="description">${escape(resource.description || 'Описание пока не добавлено.')}</p>${owner ? `<div class="actions">${link(`/${kind}/${id}/edit`, item ? 'Редактировать' : 'Редактировать образ', 'btn')}<button class="btn outline danger" id="delete-resource">Удалить</button></div><div class="linebox access-panel"><h2>Доступ и ссылки</h2><label class="publication"><span><strong>Публичный доступ</strong><small>Показывать ${item ? 'вещь' : 'образ'} в открытой коллекции.</small></span><input type="checkbox" role="switch" id="publication" ${resource.isPublic ? 'checked' : ''} ${!item && !resource.items.length ? 'disabled' : ''}></label>${!item && !resource.items.length ? '<p class="muted">Добавьте хотя бы одну вещь для публикации и создания ссылки.</p>' : ''}<p class="error" role="alert" tabindex="-1" id="detail-error" hidden></p><div class="access-links"><h3>Доступ по ссылке</h3><p>Доступ по ссылке можно дать отдельно от публикации и отозвать в любой момент.</p><button class="btn outline" id="share" ${!item && !resource.items.length ? 'disabled' : ''}>Управлять ссылками</button></div></div>` : ''}</div></section>${!embedded ? `<section class="linebox social-panel" aria-label="Действия и обсуждение"><div class="social-toolbar"><div class="actions" id="workspace-actions" aria-label="Сохранение и копирование"></div>${!embedded && resource.isPublic && (resource.ownerUsername || owner && ctx.auth.user.username) ? '<button class="btn outline small copy-link-button" id="copy-public-address">Копировать публичную ссылку</button>' : ''} </div><div id="engagement" aria-label="Реакции и обсуждение"></div></section>` : ''}`, bind() {
-    bindWorkspaceActions(ctx, kind, resource, access === 'shared' ? id : null);
-    bindEngagement(ctx, kind, resource, access === 'shared' ? id : null);
+  return { title: resource.name, html: `${crumbs(back, backText, resource.name)}<section class="detail ${item ? 'item-detail' : ''}"><header class="detail-heading"><h1>${escape(resource.name)}</h1><div class="detail-meta"><p class="eyebrow">${item ? `Вещь / ${escape(categories[resource.category])}` : 'Образ'}${access === 'shared' ? ' / По ссылке' : ''}</p>${owner ? '' : `<span class="badge">${embedded ? 'Вещь из образа' : access === 'shared' ? 'Просмотр по ссылке' : 'Открытая коллекция'}</span>`}</div>${resource.ownerUsername ? `<p class="author-line">${avatar({ username: resource.ownerUsername, avatarUrl: resource.ownerAvatarUrl })}${link(profilePath(resource.ownerUsername), `@${resource.ownerUsername}`)}</p>` : ''}</header><div class="detail-media">${item ? photo(resource, 'detail-photo') : `<div class="detail-collage">${collage(resource)}</div><h2 class="section-title">Вещи в образе</h2><div class="pieces">${resource.items.map(i => owner ? `<a href="#/items/${escape(i.id)}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>` : `<a href="#/${access === 'shared' ? 'shared' : 'public'}/outfits/${escape(id)}/items/${escape(i.id)}${username ? `?username=${encodeURIComponent(username)}` : ''}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>`).join('')}</div>`}</div><div class="detail-description"><dl class="properties">${(item ? [['Категория', categories[resource.category]], ['Бренд', resource.brand], ['Размер', resource.size], ['Цвет', resource.color]] : [['Состав', `${resource.items.length} вещей`]]).map(([k, v]) => `<div><dt>${escape(k)}</dt><dd>${escape(v || 'Не указан')}</dd></div>`).join('')}</dl><h2 class="eyebrow">${item ? 'О вещи' : 'Об образе'}</h2><p class="description">${escape(resource.description || 'Описание пока не добавлено.')}</p>${owner ? `<div class="actions">${link(`/${kind}/${id}/edit`, item ? 'Редактировать' : 'Редактировать образ', 'btn')}<button class="btn outline danger" id="delete-resource">Удалить</button></div><div class="linebox access-panel"><h2>Кто увидит ${item ? 'вещь' : 'образ'}</h2><p class="access-status">В открытой коллекции: ${resource.isPublic ? 'видно всем' : 'не опубликовано'}</p><label class="publication"><span><strong>Публичный доступ</strong><small>Все смогут найти ${item ? 'вещь' : 'образ'} в открытой коллекции.</small></span><input type="checkbox" role="switch" id="publication" ${resource.isPublic ? 'checked' : ''} ${!item && !resource.items.length ? 'disabled' : ''}></label>${!item && !resource.items.length ? '<p class="muted">Добавьте хотя бы одну вещь для публикации и создания ссылки.</p>' : ''}<p class="access-update" role="status" id="publication-status"></p><p class="error" role="alert" tabindex="-1" id="detail-error" hidden></p><div class="access-links"><h3>Доступ по ссылке</h3><p>Любой, у кого есть активная ссылка, сможет открыть ${item ? 'вещь' : 'образ'}, даже если публичный доступ выключен. Ссылку можно отозвать.</p><button class="btn outline" id="share" ${!item && !resource.items.length ? 'disabled' : ''}>Управлять ссылками</button></div></div>` : ''}</div></section>${(!embedded || access === 'public') ? `<section class="linebox social-panel" aria-label="Действия и обсуждение"><div class="social-toolbar"><div class="actions" id="workspace-actions" aria-label="Сохранение и копирование"></div>${!embedded && resource.isPublic && (resource.ownerUsername || owner && ctx.auth.user.username) ? '<button class="btn outline small copy-link-button" id="copy-public-address">Копировать публичную ссылку</button>' : ''} </div><div id="engagement" aria-label="Реакции и обсуждение"></div></section>` : ''}`, bind() {
+    bindWorkspaceActions(ctx, kind, resource, access === 'shared' ? id : null, embedded?.publicOutfitId);
+    bindEngagement(ctx, kind, resource, access === 'shared' ? id : null, embedded?.publicOutfitId);
     const copyPublic = document.querySelector('#copy-public-address');
     if (copyPublic) copyPublic.onclick = () => copyAddress(`${location.origin}/#${publicPath(resource.ownerUsername || ctx.auth.user.username, kind, resource.id)}`, ctx);
     if (!owner) return;
     document.querySelector('#delete-resource').onclick = () => confirmAction(`Удалить ${item ? 'вещь' : 'образ'}?`, item ? 'Вещь исчезнет из всех образов, ссылки на неё перестанут работать. Если образ останется пустым, его публикация и ссылки будут отключены. Это действие нельзя отменить.' : 'Образ и ссылки на него станут недоступны. Вещи останутся в вашем гардеробе. Это действие нельзя отменить.', async () => {
       await ctx.api.request(`/${kind}/${id}`, { method: 'DELETE' });
-      if (ctx.isCurrent()) { ctx.toast('Удалено'); ctx.navigate(back); }
+      if (ctx.isCurrent()) { ctx.toast(item ? 'Вещь удалена' : 'Образ удалён'); ctx.navigate(back); }
     });
     document.querySelector('#publication').onchange = async event => {
       const toggle = event.currentTarget;
+      const status = document.querySelector('#publication-status');
+      const notice = document.querySelector('#detail-error');
+      notice.hidden = true;
       toggle.disabled = true;
-      try { await ctx.api.request(`/${kind}/${id}/publication`, { method: 'PATCH', body: { isPublic: toggle.checked } }); if (ctx.isCurrent()) ctx.refresh(); }
-      catch (error) { if (ctx.isCurrent()) { toggle.checked = resource.isPublic; showError(document.querySelector('#detail-error'), error); } }
-      finally { toggle.disabled = false; }
+      status.textContent = 'Обновляем доступ…';
+      try {
+        await ctx.api.request(`/${kind}/${id}/publication`, { method: 'PATCH', body: { isPublic: toggle.checked } });
+        if (ctx.isCurrent()) ctx.refresh({ focus: '#publication' });
+      } catch (error) {
+        if (ctx.isCurrent()) {
+          toggle.checked = resource.isPublic;
+          showError(notice, error, 'Не удалось изменить доступ. Попробуйте переключить его ещё раз. ');
+        }
+      } finally {
+        status.textContent = '';
+        toggle.disabled = false;
+      }
     };
     document.querySelector('#share').onclick = () => shareDialog(ctx, kind, id);
   } };
 }
 
 function shareDialog(ctx, kind, id) {
-  const dialog = modal('Ссылки для просмотра', '<div id="share-list"></div><p id="share-status" role="status">Загружаем ссылки…</p><p class="error" role="alert" tabindex="-1" hidden></p><button type="button" class="btn outline" id="retry-links" hidden>Повторить загрузку</button><button type="button" class="btn" id="create-link" disabled>Создать ссылку</button>');
+  const dialog = modal('Ссылки для просмотра', '<p id="share-status" role="status">Загружаем ссылки…</p><div id="share-list"></div><p class="error" role="alert" tabindex="-1" hidden></p><div class="actions share-actions"><button type="button" class="btn outline" id="retry-links" hidden>Повторить загрузку</button><button type="button" class="btn" id="create-link" disabled>Создать ссылку</button></div>');
   const list = dialog.querySelector('#share-list');
   const status = dialog.querySelector('#share-status');
   const errorBox = dialog.querySelector('.error');
@@ -167,7 +209,7 @@ function shareDialog(ctx, kind, id) {
         list.querySelector('[data-cancel-revoke]')?.click();
         const confirmation = document.createElement('div');
         confirmation.className = 'share-confirmation';
-        confirmation.innerHTML = '<p>После отзыва по этой ссылке нельзя будет открыть публикацию.</p><div class="actions"><button type="button" class="btn outline small" data-cancel-revoke>Отмена</button><button type="button" class="btn danger small" data-confirm-revoke>Отозвать ссылку</button></div>';
+        confirmation.innerHTML = '<p><strong>Отозвать эту ссылку?</strong></p><p>У тех, кому вы её отправили, пропадёт доступ по этому адресу.</p><div class="actions"><button type="button" class="btn outline small" data-cancel-revoke>Отмена</button><button type="button" class="btn danger small" data-confirm-revoke>Отозвать ссылку</button></div>';
         row.append(confirmation);
         revoke.hidden = true;
         const cancel = confirmation.querySelector('[data-cancel-revoke]');
@@ -187,6 +229,7 @@ function shareDialog(ctx, kind, id) {
     errorBox.hidden = retry.hidden = true;
     let loaded = false;
     let changed = false;
+    if (mutation) status.textContent = index === undefined ? 'Создаём ссылку…' : 'Отзываем ссылку…';
     try {
       if (mutation) { await mutation(); changed = true; }
       if (!active()) return;
@@ -203,7 +246,8 @@ function shareDialog(ctx, kind, id) {
         retry.hidden = false;
         status.textContent = changed ? message : '';
       } else status.textContent = '';
-      showError(errorBox, error);
+      const nextStep = !mutation || changed ? 'Не удалось загрузить список. Нажмите «Повторить загрузку». ' : index === undefined ? 'Не удалось создать ссылку. Попробуйте снова. ' : 'Не удалось отозвать ссылку. Попробуйте снова. ';
+      showError(errorBox, error, nextStep);
     } finally {
       pending = false;
       if (active()) {
@@ -237,5 +281,5 @@ export async function outfitItemDetail(ctx, access, outfitId, itemId) {
   const resource = outfit.items.find(item => item.id === itemId);
   if (!resource) throw new ApiError(404);
   const back = access === 'shared' ? `/shared/outfits/${encodeURIComponent(outfitId)}` : username ? publicPath(username, 'outfits', outfitId) : `/public/outfits/${encodeURIComponent(outfitId)}`;
-  return detail(ctx, 'items', itemId, access, null, { resource, back, name: outfit.name });
+  return detail(ctx, 'items', itemId, access, null, { resource, back, name: outfit.name, publicOutfitId: access === 'public' ? outfitId : null });
 }

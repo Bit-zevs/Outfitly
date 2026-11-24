@@ -7,11 +7,14 @@ public sealed record ItemCatalogQuery(string? Search = null, ClothingCategory? C
     string? Brand = null, string? Size = null, string Publication = "all",
     bool ColorMissing = false, bool BrandMissing = false, bool SizeMissing = false)
 {
+    public bool HasItemAttributes => Category.HasValue || Color is not null || Brand is not null || Size is not null ||
+        ColorMissing || BrandMissing || SizeMissing;
+
     public ItemCatalogQuery Normalize()
     {
         if (Page < 1 || PageSize is < 1 or > 100 || (long)(Page - 1) * PageSize > int.MaxValue)
             throw new ArgumentException("Invalid page or pageSize (1–100).");
-        if (Sort is not ("nameAsc" or "nameDesc")) throw new ArgumentException("Invalid sort.");
+        if (Sort is not ("nameAsc" or "nameDesc" or "newest" or "likes" or "views")) throw new ArgumentException("Invalid sort.");
         if (Publication is not ("all" or "public" or "private")) throw new ArgumentException("Invalid publication.");
         if (Category is { } category && !Enum.IsDefined(category)) throw new ArgumentException("Invalid category.");
         if (ColorMissing && Color is not null || BrandMissing && Brand is not null || SizeMissing && Size is not null)
@@ -28,7 +31,8 @@ public sealed record ItemFilterOptions(IReadOnlyCollection<string?> Colors, IRea
 public interface IItemCatalogQuery
 {
     Task<ItemPage> GetAsync(Guid? ownerId, ItemCatalogQuery query, CancellationToken cancellationToken);
-    Task<ItemFilterOptions> GetFilterOptionsAsync(Guid ownerId, CancellationToken cancellationToken);
+    Task<ItemFilterOptions> GetFilterOptionsAsync(Guid? ownerId, CancellationToken cancellationToken);
+    Task<ItemFilterOptions> GetPublicOutfitFilterOptionsAsync(CancellationToken cancellationToken);
 }
 
 public sealed class ItemCatalog(IItemCatalogQuery query)
@@ -45,4 +49,10 @@ public sealed class ItemCatalog(IItemCatalogQuery query)
     }
     public Task<ItemPage> GetPublicItemsAsync(ItemCatalogQuery filter, CancellationToken cancellationToken) =>
         query.GetAsync(null, filter.Normalize(), cancellationToken);
+
+    public Task<ItemFilterOptions> GetPublicFilterOptionsAsync(CancellationToken cancellationToken) =>
+        query.GetFilterOptionsAsync(null, cancellationToken);
+
+    public Task<ItemFilterOptions> GetPublicOutfitFilterOptionsAsync(CancellationToken cancellationToken) =>
+        query.GetPublicOutfitFilterOptionsAsync(cancellationToken);
 }

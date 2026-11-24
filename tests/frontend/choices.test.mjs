@@ -14,6 +14,14 @@ test('custom choices support arrows, selection, form data and Escape', t => {
  document.activeElement.click(); assert.equal(new dom.window.FormData(document.querySelector('form')).get('size'),'M');
  assert.equal(list.hidden,true); assert.equal(document.activeElement,trigger);
  trigger.click(); document.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',bubbles:true})); assert.equal(list.hidden,true);
+ for (const shiftKey of [false, true]) {
+   trigger.click();
+   const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+   document.activeElement.dispatchEvent(tab);
+   assert.equal(list.hidden, true);
+   assert.equal(document.activeElement, trigger);
+   assert.equal(tab.defaultPrevented, false);
+ }
 });
 test('color options show swatches and preserve accessible names', t => {
  const dom=new JSDOM('<label>Цвет<select name="color"><option>Белый</option><option>Синий</option></select></label>');

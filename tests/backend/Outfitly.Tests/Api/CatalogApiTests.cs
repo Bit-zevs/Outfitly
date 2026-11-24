@@ -29,11 +29,12 @@ public sealed class CatalogApiTests
         var owner = Guid.NewGuid(); await factory.SeedOwnerAsync(owner);
         using var client = await factory.OwnerClientAsync(owner); using var guest = factory.CreateClient();
         var item = await (await client.PostAsJsonAsync("/api/items", new { name = "Shirt", category = "Top" })).Content.ReadFromJsonAsync<JsonElement>();
-        Guid privateId = default, publicId = default;
+        Guid privateId = default, publicId = default, likedId = default;
         foreach (var name in new[] { "Walk C", "Walk A", "Walk B", "Walk private", "Other" })
         {
             var created = await (await client.PostAsJsonAsync("/api/outfits", new { name })).Content.ReadFromJsonAsync<JsonElement>();
             var id = created.GetProperty("id").GetGuid();
+            if (name == "Walk C") likedId = id;
             (await client.PostAsync($"/api/outfits/{id}/items/{item.GetProperty("id").GetGuid()}", null)).EnsureSuccessStatusCode();
             if (name == "Walk private") privateId = id;
             else { (await client.PatchAsJsonAsync($"/api/outfits/{id}/publication", new { isPublic = true })).EnsureSuccessStatusCode(); publicId = id; }
@@ -45,6 +46,16 @@ public sealed class CatalogApiTests
         Assert.Equal(new[] { "Walk C", "Walk B" }, first.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("name").GetString()));
         Assert.Equal(HttpStatusCode.NotFound, (await guest.GetAsync($"/api/wardrobe/outfits/{privateId}")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await guest.GetAsync($"/api/wardrobe/outfits/{publicId}")).StatusCode);
+        var readerId = Guid.NewGuid();
+        await factory.SeedOwnerAsync(readerId);
+        using var reader = await factory.OwnerClientAsync(readerId);
+        (await reader.PutAsync($"/api/outfits/{likedId}/like", null)).EnsureSuccessStatusCode();
+        (await reader.PostAsync($"/api/outfits/{publicId}/views", null)).EnsureSuccessStatusCode();
+        foreach (var (sort, expected) in new[] { ("", publicId), ("&sort=likes", likedId), ("&sort=views", publicId) })
+        {
+            var sorted = await guest.GetFromJsonAsync<JsonElement>($"/api/wardrobe/outfits?pageSize=1{sort}");
+            Assert.Equal(expected, Assert.Single(sorted.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
+        }
         foreach (var invalid in new[] { "page=0", "pageSize=101", "sort=bad", "page=1&page=2" })
             Assert.Equal(HttpStatusCode.BadRequest, (await guest.GetAsync("/api/wardrobe/outfits?" + invalid)).StatusCode);
     }
@@ -77,6 +88,73 @@ public sealed class CatalogApiTests
         var empty = await client.GetFromJsonAsync<JsonElement>("/api/items?page=100");
         Assert.Equal(5, empty.GetProperty("total").GetInt32());
         Assert.Empty(empty.GetProperty("items").EnumerateArray());
+    }
+
+    [Theory]
+    [InlineData("/api/wardrobe")]
+    [InlineData("/api/wardrobe/outfits")]
+    public async Task Public_catalogs_reject_conflicting_attribute_filters(string route)
+    {
+        using var factory = new ApiFactory();
+        using var guest = factory.CreateClient();
+        using var response = await guest.GetAsync($"{route}?brand=brand&brandMissing=true");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Public_options_respect_visibility_and_outfit_filters_match_one_piece()
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        using var client = await factory.OwnerClientAsync(owner);
+        using var guest = factory.CreateClient();
+
+        async Task<Guid> Item(string name, string color, string brand, string size, bool publish = false)
+        {
+            using var created = await client.PostAsJsonAsync("/api/items", new { name, category = "Top", color, brand, size, description = "Made with linen" });
+            created.EnsureSuccessStatusCode();
+            var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            if (publish)
+                (await client.PatchAsJsonAsync($"/api/items/{id}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+            return id;
+        }
+
+        async Task<Guid> Outfit(string name, bool publish, params Guid[] items)
+        {
+            using var created = await client.PostAsJsonAsync("/api/outfits", new { name, description = "Evening walk" });
+            created.EnsureSuccessStatusCode();
+            var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+            foreach (var itemId in items)
+                (await client.PostAsync($"/api/outfits/{id}/items/{itemId}", null)).EnsureSuccessStatusCode();
+            if (publish)
+                (await client.PatchAsJsonAsync($"/api/outfits/{id}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+            return id;
+        }
+
+        var publicItem = await Item("Coat", "White", "Studio", "M", publish: true);
+        var red = await Item("Sweater", "Red", "Atelier", "S");
+        var blue = await Item("Shirt", "Blue", "Atelier", "M");
+        var matching = await Item("Blouse", "Red", "Atelier", "M");
+        var hidden = await Item("Private", "Hidden", "Secret", "M");
+        await Outfit("Split attributes", true, red, blue);
+        var publicOutfit = await Outfit("Matching attributes", true, matching);
+        await Outfit("Private outfit", false, hidden, matching);
+
+        var itemOptions = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe/filter-options");
+        Assert.Equal("studio", Assert.Single(itemOptions.GetProperty("brands").EnumerateArray()).GetString());
+        var outfitOptions = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe/outfits/filter-options");
+        Assert.Equal(new[] { "blue", "red" }, outfitOptions.GetProperty("colors").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal("atelier", Assert.Single(outfitOptions.GetProperty("brands").EnumerateArray()).GetString());
+
+        var items = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe?search=LINEN&brand=STUDIO&size=m&category=Top");
+        Assert.Equal(1, items.GetProperty("total").GetInt32());
+        Assert.Equal(publicItem, Assert.Single(items.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
+        var privateItems = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe?brand=Atelier");
+        Assert.Equal(0, privateItems.GetProperty("total").GetInt32());
+        var outfits = await guest.GetFromJsonAsync<JsonElement>("/api/wardrobe/outfits?search=evening&category=Top&color=RED&brand=atelier&size=m");
+        Assert.Equal(1, outfits.GetProperty("total").GetInt32());
+        Assert.Equal(publicOutfit, Assert.Single(outfits.GetProperty("items").EnumerateArray()).GetProperty("id").GetGuid());
     }
 
     [Theory]

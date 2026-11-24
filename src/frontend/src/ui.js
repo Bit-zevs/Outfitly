@@ -8,7 +8,7 @@ export function toast(message) {
   element.textContent = message;
   element.hidden = false;
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { element.hidden = true; }, 5000);
+  toastTimer = setTimeout(() => { element.hidden = true; }, /^(Вещь сохранена|Вещь удалена)$/.test(message) ? 2100 : 5000);
 }
 export function showError(element, error, prefix = '') {
   element.hidden = false;
@@ -30,9 +30,9 @@ export function modal(heading, content, bind = () => {}) {
   if (!focusGuardInstalled) {
     document.addEventListener('keydown', event => {
       const activeDialog = document.querySelector('#dialog');
-      if (event.key !== 'Tab' || !activeDialog.open) return;
+      if (event.defaultPrevented || event.key !== 'Tab' || !activeDialog.open) return;
       const focusable = [...activeDialog.querySelectorAll('button, a[href], input, select, textarea, [tabindex="0"]')]
-        .filter(element => !element.disabled && element.getClientRects().length);
+        .filter(element => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length);
       if (!focusable.length) { event.preventDefault(); return; }
       const current = focusable.indexOf(document.activeElement);
       const next = current < 0 ? (event.shiftKey ? focusable.length - 1 : 0) : (current + (event.shiftKey ? -1 : 1) + focusable.length) % focusable.length;
@@ -52,8 +52,8 @@ export function modal(heading, content, bind = () => {}) {
   bind(dialog);
   return dialog;
 }
-export function confirmAction(heading, text, action) {
-  modal(heading, `<p class="lead">${escape(text)}</p><p class="error" role="alert" tabindex="-1" hidden></p><form class="actions"><button class="btn outline" type="button" data-cancel>Отмена</button><button class="btn danger" type="submit">Удалить</button></form>`, dialog => {
+export function confirmAction(heading, text, action, label = 'Удалить') {
+  modal(heading, `<p class="lead">${escape(text)}</p><p class="error" role="alert" tabindex="-1" hidden></p><form class="actions"><button class="btn outline" type="button" data-cancel>Отмена</button><button class="btn danger" type="submit">${escape(label)}</button></form>`, dialog => {
     dialog.querySelector('[data-cancel]').onclick = () => dialog.close();
     dialog.querySelector('form').onsubmit = async event => {
       event.preventDefault();

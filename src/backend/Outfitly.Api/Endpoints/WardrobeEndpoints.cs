@@ -11,10 +11,14 @@ public static class WardrobeEndpoints
     public static void MapWardrobeEndpoints(this WebApplication app)
     {
         app.MapGet("/api/wardrobe", async (HttpContext context, ItemCatalog catalog) => WardrobeResponses.Page(
-            await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query), context.RequestAborted), false));
+            await catalog.GetPublicItemsAsync(CatalogRequest.Parse(context.Request.Query, defaultSort: "newest"), context.RequestAborted), false));
+        app.MapGet("/api/wardrobe/filter-options", (ItemCatalog catalog, CancellationToken ct) =>
+            catalog.GetPublicFilterOptionsAsync(ct));
+        app.MapGet("/api/wardrobe/outfits/filter-options", (ItemCatalog catalog, CancellationToken ct) =>
+            catalog.GetPublicOutfitFilterOptionsAsync(ct));
         app.MapGet("/api/wardrobe/outfits", async (HttpContext http, PublicProfiles profiles, CancellationToken ct) =>
         {
-            var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query), ct);
+            var page = await profiles.AllOutfitsAsync(CatalogRequest.Parse(http.Request.Query, defaultSort: "newest"), ct);
             return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/wardrobe/outfits/{outfit.Id}/items/{id}/photo")), page.Total, page.Page, page.PageSize };
         });
         app.MapGet("/api/wardrobe/outfits/{id:guid}", async (Guid id, PublicProfiles profiles, CancellationToken ct) =>
@@ -34,17 +38,17 @@ public static class WardrobeEndpoints
             catalog.GetFilterOptionsAsync(CurrentActor.Id(context.User), context.RequestAborted));
         items.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             WardrobeResponses.Item(service.GetItem(CurrentActor.Id(user), id), $"/api/items/{id}/photo"));
-        items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service, IConfiguration configuration) =>
         {
             var actor = CurrentActor.Id(user);
             var item = service.CreateItem(actor, request.Name, request.Category, request.Color,
-                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty, httpRequest));
+                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty, httpRequest, configuration["EmailConfirmation:PublicUrl"]));
             return Results.Created($"/api/items/{item.Id}", WardrobeResponses.Item(service.GetItem(actor, item.Id), $"/api/items/{item.Id}/photo"));
         }).AddEndpointFilter<CommitChangesFilter>();
-        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service, IConfiguration configuration) =>
         {
             var actor = CurrentActor.Id(user);
-            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, httpRequest, service.GetItem(actor, id));
+            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, httpRequest, configuration["EmailConfirmation:PublicUrl"], service.GetItem(actor, id));
             service.UpdateItem(actor, id, request.Name, request.Category, request.Color,
                 request.Size, request.Brand, request.Description, photoUrl);
             return Results.NoContent();
@@ -69,7 +73,7 @@ public static class WardrobeEndpoints
         var outfits = app.MapGroup("/api/outfits").RequireAuthorization(CurrentActor.PolicyName);
         outfits.MapGet("/", async (HttpContext http, OutfitCatalog catalog) =>
         {
-            var page = await catalog.GetAsync(CurrentActor.Id(http.User), CatalogRequest.Parse(http.Request.Query), http.RequestAborted);
+            var page = await catalog.GetAsync(CurrentActor.Id(http.User), CatalogRequest.Parse(http.Request.Query, itemAttributes: false), http.RequestAborted);
             return new { Items = page.Items.Select(outfit => WardrobeResponses.Outfit(outfit, id => $"/api/items/{id}/photo")), page.Total, page.Page, page.PageSize };
         });
         outfits.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>

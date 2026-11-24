@@ -20,18 +20,11 @@ public sealed class UsernameApiTests
         await ApiFactory.SetCsrfAsync(client);
         var response = await client.PostAsJsonAsync("/api/auth/register", new
         { email = "anna@example.com", password = "a long password", displayName = "Анна", username = " @Anna " });
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var account = (await response.Content.ReadFromJsonAsync<AccountView>())!;
-        Assert.Equal("anna", account.Username);
-        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/auth/register", new
-        { email = "other@example.com", password = "a long password", displayName = "Other", username = "ANNA" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", new
-        { email = "other@example.com", password = "a long password", displayName = "Other" })).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", new
-        { email = "other@example.com", password = "a long password", displayName = "Other", username = "1invalid" })).StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.PatchAsJsonAsync("/api/auth/me/username", new { username = "new_anna" })).StatusCode);
-        await factory.ConfirmEmailAsync(client, "anna@example.com");
+        await factory.ConfirmEmailAsync(client, "anna@example.com", "a long password", " @Anna ");
         (await client.PostAsJsonAsync("/api/auth/login", new { email = "anna@example.com", password = "a long password" })).EnsureSuccessStatusCode();
+        Assert.Equal("anna", (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!.Username);
         client.DefaultRequestHeaders.Remove("X-CSRF-TOKEN");
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PatchAsJsonAsync("/api/auth/me/username", new { username = "new_anna" })).StatusCode);
         await ApiFactory.SetCsrfAsync(client);
@@ -49,6 +42,39 @@ public sealed class UsernameApiTests
         Assert.Equal("new_anna", (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!.Username);
     }
 
+    [Fact]
+    public async Task Register_ignores_legacy_nick_fields_and_confirmation_claims_a_nick_atomically()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var client = factory.CreateClient();
+        await ApiFactory.SetCsrfAsync(client);
+        const string password = "a confirmation password";
+        const string nick = "shared_nick";
+        var first = await client.PostAsJsonAsync("/api/auth/register",
+            new { email = "first@example.com", displayName = "First", username = nick });
+        var second = await client.PostAsJsonAsync("/api/auth/register",
+            new { email = "second@example.com", displayName = "Second", username = nick });
+        Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, second.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+
+        using (var pending = factory.Services.CreateScope())
+            Assert.False(await pending.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Users.AnyAsync(user => user.Username == nick));
+
+        await factory.ConfirmEmailAsync(client, "first@example.com", password, nick);
+        var existing = await client.PostAsJsonAsync("/api/auth/register",
+            new { email = "first@example.com", displayName = "First", username = nick });
+        Assert.Equal(HttpStatusCode.Accepted, existing.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await existing.Content.ReadAsStringAsync());
+
+        var token = (await factory.Mail.WaitForAsync("second@example.com")).Token;
+        var conflict = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, password, username = nick });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Equal("username_taken", (await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, password, username = "1invalid" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, password, username = "second_nick" })).StatusCode);
+    }
     [Fact]
     public async Task Public_search_is_paginated_literal_prefix_only_and_hides_private_account_data()
     {

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { accountSettings } from '../../src/frontend/src/account-settings.js';
-import { account, authPage, detail, discover } from '../../src/frontend/src/pages.js';
+import { account, detail, discover } from '../../src/frontend/src/pages.js';
+import { confirmEmailPage } from '../../src/frontend/src/email-confirmation.js';
 import { peoplePage, profilePage } from '../../src/frontend/src/profiles.js';
 import { createAuth } from '../../src/frontend/src/auth.js';
 import { ApiError } from '../../src/frontend/src/api.js';
@@ -31,16 +32,17 @@ test('public links contain the owner username while personal and token links sta
   assert.equal(shareAddress('https://outfitly.test', 'items', 'secret'), 'https://outfitly.test/#/shared/items/secret');
 });
 
-test('registration sends username and explains a taken username separately from email', async t => {
+test('email confirmation keeps the entered nick and focuses it after a conflict', async t => {
   let input;
-  mount(t, authPage({ route: parseRoute('#/register'), isCurrent: () => true,
-    auth: { async register(...args) { input = args; throw new ApiError(409, { code: 'username_taken' }); } } }, true));
+  mount(t, confirmEmailPage({ route: parseRoute('#/confirm-email?token=token'), isCurrent: () => true,
+    auth: { async confirmEmail(...args) { input = args; throw new ApiError(409, { code: 'username_taken' }); } } }));
   const form = document.querySelector('form');
-  Object.entries({ displayName: 'Анна', username: '@anna', email: 'anna@example.com', password: 'long password', passwordConfirmation: 'long password' })
+  Object.entries({ username: '@anna', password: 'long password', passwordConfirmation: 'long password' })
     .forEach(([name, value]) => { form.elements[name].value = value; });
   await form.onsubmit({ preventDefault });
-  assert.equal(input[4], '@anna');
-  assert.match(document.querySelector('#form-error').textContent, /@username уже занят/);
+  assert.equal(input[3], '@anna');
+  assert.match(document.querySelector('#confirmation-status').textContent, /ник уже занят/);
+  assert.equal(document.activeElement, form.elements.username);
   assert.equal(form.elements.username.value, '@anna');
 });
 

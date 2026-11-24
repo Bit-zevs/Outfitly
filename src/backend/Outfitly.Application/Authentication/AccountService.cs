@@ -8,25 +8,21 @@ namespace Outfitly.Application.Authentication;
 // Prepares changes only; the HTTP boundary commits before issuing a cookie.
 public sealed partial class AccountService(IAccountStore store, IAccountPasswordHasher passwords, TimeProvider clock)
 {
-    public async Task<RegisteredAccount> RegisterAsync(string email, string password, string displayName, string username,
+    public async Task<RegisteredAccount> RegisterAsync(string email, string displayName,
         CancellationToken cancellationToken = default)
     {
         var address = Email(email);
-        if (password is null || password.Length is < 8 or > 128)
-            throw new ArgumentException("Password must contain between 8 and 128 characters.");
-        var user = new User(Guid.NewGuid(), displayName, Usernames.Normalize(username));
-        if (await store.UsernameExistsAsync(user.Username, user.Id, cancellationToken))
-            throw new UsernameConflictException();
+        var user = User.ForRegistration(Guid.NewGuid(), displayName);
         if (await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken) is not null)
             throw new AccountConflictException();
         var account = new Account
         {
             UserId = user.Id, Email = address, NormalizedEmail = address.ToUpperInvariant(),
-            PasswordHash = passwords.Hash(password)
+            PasswordHash = string.Empty
         };
         var confirmation = IssueConfirmation(account);
         store.Add(user, account);
-        return new RegisteredAccount(user.Id, address, user.DisplayName, user.Username, confirmation);
+        return new RegisteredAccount(user.Id, address, user.DisplayName, confirmation);
     }
 
     public async Task<ConfirmationEmail?> ResendConfirmationAsync(string email, CancellationToken cancellationToken = default)
@@ -35,16 +31,25 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         if (account is null || account.EmailConfirmed) return null;
         if (account.ConfirmationIssuedAtUtc is { } issued && issued.AddSeconds(60) > clock.GetUtcNow().UtcDateTime)
             throw new ConfirmationTooFrequentException();
+        if (account.ConfirmationTokenHash is { } hash && account.ConfirmationExpiresAtUtc is { } expires &&
+            expires > clock.GetUtcNow().UtcDateTime)
+            store.Add(new PreviousConfirmationToken(hash, account.UserId, expires));
         return IssueConfirmation(account);
     }
 
-    public async Task ConfirmEmailAsync(string token, CancellationToken cancellationToken = default)
+    public async Task ConfirmEmailAsync(string token, string password, string username, CancellationToken cancellationToken = default)
     {
         if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
             throw new InvalidConfirmationTokenException();
-        var account = await store.FindByConfirmationHashAsync(TokenHash(token), cancellationToken);
-        if (account is null || account.EmailConfirmed || account.ConfirmationExpiresAtUtc is not { } expires ||
-            expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidConfirmationTokenException();
+        var account = await store.FindByConfirmationHashAsync(TokenHash(token), clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (account is null || account.EmailConfirmed) throw new InvalidConfirmationTokenException();
+        ValidatePassword(password);
+        var normalized = Usernames.Normalize(username);
+        var user = await store.FindUserAsync(account.UserId, cancellationToken) ?? throw new InvalidConfirmationTokenException();
+        if (await store.UsernameExistsAsync(normalized, user.Id, cancellationToken))
+            throw new UsernameConflictException();
+        user.ChangeUsername(normalized);
+        account.PasswordHash = passwords.Hash(password);
         account.EmailConfirmed = true;
         account.ConfirmationTokenHash = null;
         account.ConfirmationExpiresAtUtc = null;
@@ -56,30 +61,32 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         account.ConfirmationTokenHash = TokenHash(token);
         account.ConfirmationIssuedAtUtc = clock.GetUtcNow().UtcDateTime;
         account.ConfirmationExpiresAtUtc = account.ConfirmationIssuedAtUtc.Value.AddHours(24);
-        return new ConfirmationEmail(account.Email, token);
+        return new ConfirmationEmail(account.Email, token, AccountEmailPurpose.Confirmation,
+            account.ConfirmationIssuedAtUtc.Value, account.ConfirmationExpiresAtUtc.Value);
     }
 
     private static string TokenHash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    public async Task<ConfirmationEmail?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<IssuedPasswordReset?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default)
     {
         var account = await store.FindByEmailAsync(Email(email).ToUpperInvariant(), cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
         if (account is null || !account.EmailConfirmed ||
-            account.PasswordResetIssuedAtUtc is { } issued && issued.AddMinutes(1) > now) return null;
+            account.PasswordResetTokenHash is not null && account.PasswordResetExpiresAtUtc > now) return null;
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        account.PasswordResetTokenHash = TokenHash(token);
+        var hash = TokenHash(token);
+        var expires = now.AddHours(1);
+        account.PasswordResetTokenHash = hash;
         account.PasswordResetIssuedAtUtc = now;
-        account.PasswordResetExpiresAtUtc = now.AddHours(1);
-        return new ConfirmationEmail(account.Email, token, AccountEmailPurpose.PasswordReset);
+        account.PasswordResetExpiresAtUtc = expires;
+        return new IssuedPasswordReset(token, hash, now, expires);
     }
 
     public async Task ResetPasswordAsync(string token, string password, CancellationToken cancellationToken = default)
     {
         if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
             throw new InvalidPasswordResetTokenException();
-        if (password is null || password.Length is < 8 or > 128)
-            throw new ArgumentException("Password must contain between 8 and 128 characters.");
+        ValidatePassword(password);
         var account = await store.FindByPasswordResetHashAsync(TokenHash(token), cancellationToken);
         if (account is null || !account.EmailConfirmed || account.PasswordResetExpiresAtUtc is not { } expires ||
             expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidPasswordResetTokenException();
@@ -93,10 +100,10 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         if (password is null || password.Length > 128)
             return null;
         var account = await store.FindByEmailAsync(address.ToUpperInvariant(), cancellationToken);
-        var verification = passwords.Verify(account?.PasswordHash, password);
-        if (account is null || verification == PasswordCheck.Failed)
+        var confirmed = account is { EmailConfirmed: true };
+        var verification = passwords.Verify(confirmed ? account!.PasswordHash : null, password);
+        if (account is null || !confirmed || verification == PasswordCheck.Failed)
             return null;
-        if (!account.EmailConfirmed) throw new EmailNotConfirmedException();
         var user = await GetUserAsync(account.UserId, cancellationToken);
         if (user is null) return null;
         if (verification == PasswordCheck.RehashNeeded) account.PasswordHash = passwords.Hash(password);
@@ -109,6 +116,12 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         };
         store.Add(session);
         return new LoginResult(user, session);
+    }
+
+    private static void ValidatePassword(string password)
+    {
+        if (password is null || password.Length is < 8 or > 128)
+            throw new ArgumentException("Password must contain between 8 and 128 characters.");
     }
 
     public async Task<AccountView?> ValidateSessionAsync(Guid userId, Guid sessionId,

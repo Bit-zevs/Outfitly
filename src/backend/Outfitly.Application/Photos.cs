@@ -16,6 +16,7 @@ public sealed record ProcessedPhoto(byte[] Content, string Extension);
 public sealed record StoredPhoto(Stream Content, string ContentType);
 public sealed class UnsupportedPhotoException : Exception;
 public sealed class PhotoTooLargeException : Exception;
+public sealed class PhotoProcessingBusyException : Exception;
 public sealed record ShareLinkView(Guid Id, string Token);
 
 // Scoped alongside the database unit of work. File removal never precedes commit.
@@ -44,6 +45,15 @@ public sealed class PhotoService(WardrobeService wardrobe, IPhotoStore store,
         CancellationToken cancellationToken)
     {
         var item = wardrobe.OwnedItem(actor, id);
+        var photo = processor.Process(await ReadUploadAsync(content, cancellationToken), contentType);
+        var key = await store.WriteAsync(photo.Content, photo.Extension, cancellationToken);
+        changes.Created(key);
+        changes.RemoveAfterCommit(item.PhotoStorageKey);
+        item.SetUploadedPhoto(key);
+    }
+
+    internal static async Task<byte[]> ReadUploadAsync(Stream content, CancellationToken cancellationToken)
+    {
         using var buffer = new MemoryStream();
         var chunk = new byte[81920];
         int count;
@@ -53,11 +63,7 @@ public sealed class PhotoService(WardrobeService wardrobe, IPhotoStore store,
             buffer.Write(chunk, 0, count);
         }
         if (buffer.Length == 0) throw new ArgumentException("Photo must not be empty.");
-        var photo = processor.Process(buffer.ToArray(), contentType);
-        var key = await store.WriteAsync(photo.Content, photo.Extension, cancellationToken);
-        changes.Created(key);
-        changes.RemoveAfterCommit(item.PhotoStorageKey);
-        item.SetUploadedPhoto(key);
+        return buffer.ToArray();
     }
 
     public void Delete(Guid actor, Guid id)

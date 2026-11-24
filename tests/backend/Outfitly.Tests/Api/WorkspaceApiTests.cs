@@ -31,6 +31,138 @@ public sealed class WorkspaceApiTests
         Assert.Equal(isPublic, item.IsPublic);
     }
     [Fact]
+    public async Task New_outfit_can_be_published_atomically_with_its_members()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var owner = await SocialProfileApiTests.Register(factory, "publishoutfit");
+        using var guest = factory.CreateClient();
+        var item = await CreateItem(owner, "Shirt");
+        var draftId = Guid.NewGuid();
+        var draft = await PutDraft(owner, draftId, new("outfits", null, null, null,
+            new(Name: "Look", ItemIds: [item], IsPublic: true)));
+        var saved = await owner.PostAsJsonAsync($"/api/drafts/{draftId}/save", new { version = draft.Version });
+        saved.EnsureSuccessStatusCode();
+        var id = (await saved.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        var outfit = (await guest.GetFromJsonAsync<OutfitView>($"/api/wardrobe/outfits/{id}", Json))!;
+        Assert.True(outfit.IsPublic);
+        Assert.Equal(item, Assert.Single(outfit.Items).Id);
+    }
+
+    [Theory]
+    [InlineData("https://localhost/api/items/example/photo", HttpStatusCode.BadRequest)]
+    [InlineData("https://localhost/a/../%61pi/items/example/photo", HttpStatusCode.BadRequest)]
+    [InlineData("https://localhost:7043/api/items/example/photo", HttpStatusCode.BadRequest)]
+    [InlineData("https://example.com/api/images/coat.png", HttpStatusCode.OK)]
+    public async Task Draft_completion_enforces_the_same_photo_url_boundary(string url, HttpStatusCode expected)
+    {
+        using var factory = new ApiFactory();
+        var actor = Guid.NewGuid();
+        await factory.SeedOwnerAsync(actor);
+        using var client = await factory.OwnerClientAsync(actor);
+        var id = Guid.NewGuid();
+        var draft = await PutDraft(client, id, new("items", null, null, null,
+            new(Name: "Coat", Category: ClothingCategory.Outerwear, PhotoUrl: url, PhotoMode: "url")));
+
+        var saved = await client.PostAsJsonAsync($"/api/drafts/{id}/save", new { version = draft.Version });
+
+        Assert.Equal(expected, saved.StatusCode);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+        var items = await db.WardrobeItems.AsNoTracking().ToListAsync();
+        if (expected == HttpStatusCode.OK) Assert.Equal(url, Assert.Single(items).PhotoUrl);
+        else Assert.Empty(items);
+    }
+
+    [Fact]
+    public async Task Copy_commands_reject_excess_photos_before_writing_and_share_an_account_quota()
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        var reader = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        await factory.SeedOwnerAsync(reader);
+        using var seller = await factory.OwnerClientAsync(owner);
+        using var buyer = await factory.OwnerClientAsync(reader);
+        var original = await CreateItem(seller, "Original");
+        (await seller.PutAsync($"/api/items/{original}/photo", ImageForm())).EnsureSuccessStatusCode();
+
+        var largeId = Guid.NewGuid();
+        var allowedId = Guid.NewGuid();
+        using (var seed = factory.Services.CreateScope())
+        {
+            var db = seed.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            var photo = (await db.WardrobeItems.SingleAsync()).PhotoStorageKey!;
+            var large = new Outfit(largeId, owner, "Large");
+            var allowed = new Outfit(allowedId, owner, "Allowed");
+            for (var index = 0; index < 21; index++)
+            {
+                var item = new WardrobeItem(Guid.NewGuid(), owner, $"Item {index}", ClothingCategory.Top);
+                item.SetUploadedPhoto(photo);
+                large.AddItem(item);
+                if (index < 20) allowed.AddItem(item);
+            }
+            large.Publish();
+            allowed.Publish();
+            db.Outfits.AddRange(large, allowed);
+            await db.SaveChangesAsync();
+        }
+
+        var rejected = await buyer.PostAsJsonAsync($"/api/outfits/{largeId}/copies", new { operationId = Guid.NewGuid() });
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+        Assert.Single(Directory.GetFiles(factory.PhotoRoot));
+
+        var last = Guid.Empty;
+        for (var index = 0; index < 5; index++)
+        {
+            last = Guid.NewGuid();
+            (await buyer.PostAsJsonAsync($"/api/outfits/{allowedId}/copies", new { operationId = last })).EnsureSuccessStatusCode();
+        }
+        (await buyer.PostAsJsonAsync($"/api/outfits/{allowedId}/copies", new { operationId = last })).EnsureSuccessStatusCode();
+        (await seller.PatchAsJsonAsync($"/api/items/{original}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+        rejected = await buyer.PostAsJsonAsync($"/api/items/{original}/copies", new { operationId = Guid.NewGuid() });
+        Assert.Equal(HttpStatusCode.Conflict, rejected.StatusCode);
+        Assert.Equal(101, Directory.GetFiles(factory.PhotoRoot).Length);
+    }
+
+    [Fact]
+    public async Task Public_outfit_discussion_never_exposes_or_accepts_replies_to_private_link_comments()
+    {
+        using var factory = new ApiFactory();
+        var owner = Guid.NewGuid();
+        var visitor = Guid.NewGuid();
+        await factory.SeedOwnerAsync(owner);
+        await factory.SeedOwnerAsync(visitor);
+        using var seller = await factory.OwnerClientAsync(owner);
+        using var reader = await factory.OwnerClientAsync(visitor);
+        using var guest = factory.CreateClient();
+        var item = await CreateItem(seller, "Coat");
+        var outfit = await CreateOutfit(seller, item);
+        var link = await seller.PostAsync($"/api/items/{item}/share-links", null);
+        link.EnsureSuccessStatusCode();
+        var token = (await link.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("token").GetString();
+        var target = $"/api/items/{item}";
+        var restricted = await reader.PostAsJsonAsync($"{target}/comments?shareToken={token}", new { text = "Restricted" });
+        restricted.EnsureSuccessStatusCode();
+        var parentId = (await restricted.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        (await seller.PatchAsJsonAsync($"/api/outfits/{outfit}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+        var publicContext = $"?publicOutfitId={outfit}";
+        Assert.Equal(0, (await guest.GetFromJsonAsync<EngagementView>($"{target}/engagement{publicContext}"))!.Comments);
+        Assert.Empty((await guest.GetFromJsonAsync<PublicPage<CommentView>>($"{target}/comments{publicContext}"))!.Items);
+        Assert.Equal(HttpStatusCode.BadRequest, (await reader.PostAsJsonAsync($"{target}/comments{publicContext}",
+            new { text = "Cross-audience reply", parentId })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.PatchAsJsonAsync($"{target}/comments/{parentId}{publicContext}",
+            new { text = "Cross-audience edit" })).StatusCode);
+
+        (await reader.PostAsJsonAsync($"{target}/comments{publicContext}", new { text = "Public" })).EnsureSuccessStatusCode();
+        Assert.Equal("Public", Assert.Single((await guest.GetFromJsonAsync<PublicPage<CommentView>>(
+            $"{target}/comments{publicContext}"))!.Items).Text);
+        Assert.Equal("Restricted", Assert.Single((await reader.GetFromJsonAsync<PublicPage<CommentView>>(
+            $"{target}/comments?shareToken={token}"))!.Items).Text);
+    }
+
+    [Fact]
     public async Task Favorites_recheck_access_keep_private_tombstones_and_never_share_another_accounts_list()
     {
         using var factory = new ApiFactory(testAuthentication: false); await factory.InitializeDatabaseAsync();
@@ -79,6 +211,39 @@ public sealed class WorkspaceApiTests
         var retry = await reader.PostAsJsonAsync($"/api/outfits/{outfit}/copies", new { operationId }); retry.EnsureSuccessStatusCode();
         Assert.Equal(copyId, (await retry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
     }
+    [Fact]
+    public async Task Public_outfit_members_can_be_copied_and_discussed_only_with_valid_context()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var owner = await SocialProfileApiTests.Register(factory, "owner");
+        using var reader = await SocialProfileApiTests.Register(factory, "reader");
+        var item = await CreateItem(owner, "Coat");
+        var unrelated = await CreateItem(owner, "Other");
+        var outfit = await CreateOutfit(owner, item);
+        var query = $"?publicOutfitId={outfit}";
+        var operation = new { operationId = Guid.NewGuid() };
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation)).StatusCode);
+        (await owner.PatchAsJsonAsync($"/api/outfits/{outfit}/publication", new { isPublic = true })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{unrelated}/engagement{query}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{item}/engagement")).StatusCode);
+        (await reader.PutAsync($"/api/items/{item}/like{query}", null)).EnsureSuccessStatusCode();
+        (await reader.PostAsJsonAsync($"/api/items/{item}/comments{query}", new { text = "Nice coat" })).EnsureSuccessStatusCode();
+        var counts = (await reader.GetFromJsonAsync<EngagementView>($"/api/items/{item}/engagement{query}"))!;
+        Assert.True(counts.IsLiked);
+        Assert.Equal(1, counts.Comments);
+        var response = await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation);
+        response.EnsureSuccessStatusCode();
+        var copiedId = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+        Assert.NotEqual(item, copiedId);
+        Assert.False((await reader.GetFromJsonAsync<ItemView>($"/api/items/{copiedId}", Json))!.IsPublic);
+        var retry = await reader.PostAsJsonAsync($"/api/items/{item}/copies{query}", operation);
+        retry.EnsureSuccessStatusCode();
+        Assert.Equal(copiedId, (await retry.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid());
+        (await owner.PatchAsJsonAsync($"/api/outfits/{outfit}/publication", new { isPublic = false })).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.NotFound, (await reader.GetAsync($"/api/items/{item}/engagement{query}")).StatusCode);
+    }
+
     [Fact]
     public async Task Drafts_accept_incomplete_content_are_private_and_finalize_once_with_the_photo()
     {

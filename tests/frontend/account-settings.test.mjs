@@ -33,16 +33,16 @@ test('profile save updates identity without losing edits in the independent emai
   assert.equal(dirty, true);
 });
 
-test('email form reports SMTP failure, preserves pending email, clears password and supports cancellation', async t => {
+test('email form acknowledges the request, preserves pending email and supports cancellation', async t => {
   const auth = { user: user(), async requestEmailChange(email, password) {
     assert.equal(password, 'current password'); this.user.pendingEmail = email;
-    return { pendingEmail: email, confirmationEmailSent: false };
+    return { pendingEmail: email };
   }, async cancelEmailChange() { this.user.pendingEmail = null; } };
   mount(t, accountSettings({ auth, isCurrent: () => true, toast() {} }));
   const form = document.querySelector('#email-form');
   form.elements.email.value = 'new@example.com'; form.elements.emailCurrentPassword.value = 'current password';
   await form.onsubmit({ preventDefault });
-  assert.match(document.querySelector('#email-status').textContent, /письмо отправить не удалось/);
+  assert.match(document.querySelector('#email-status').textContent, /Запрос принят/);
   assert.match(document.querySelector('#pending-email').textContent, /new@example.com/);
   assert.equal(form.elements.emailCurrentPassword.value, '');
   assert.equal(document.querySelector('#current-email').textContent, 'old@example.com');

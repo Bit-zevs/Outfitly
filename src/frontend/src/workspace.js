@@ -2,27 +2,34 @@ import { escape, empty, link, pagination, photo, title } from './components.js';
 import { errorMessage } from './api.js';
 import { busy, confirmAction } from './ui.js';
 
-export function bindWorkspaceActions(ctx, kind, resource, token) {
+export function bindWorkspaceActions(ctx, kind, resource, token, publicOutfitId) {
   const root = document.querySelector('#workspace-actions'); if (!root) return;
   if (!ctx.auth.user) { root.innerHTML = link('/login', 'Войдите, чтобы сохранить в избранное', 'btn outline'); return; }
   const base = `/${kind}/${resource.id}`, query = token ? `?shareToken=${encodeURIComponent(token)}` : '';
+  const copyQuery = publicOutfitId ? `?publicOutfitId=${encodeURIComponent(publicOutfitId)}` : query;
+  const canFavorite = !publicOutfitId || resource.isPublic;
   let disposed = false, pending = false, saved = false, operationId;
   const active = () => !disposed && ctx.isCurrent() && root.isConnected;
-  root.innerHTML = '<button class="btn outline" id="favorite-resource" disabled>Избранное…</button>' + (kind === 'outfits' ? '<button class="btn outline" id="copy-outfit">Копировать в мой гардероб</button>' : '') + '<p class="error" role="alert" id="workspace-error" hidden></p>';
+  root.innerHTML = '<button class="btn outline" id="favorite-resource" disabled>Избранное…</button>' + '<button class="btn outline" id="copy-resource">Копировать в мой гардероб</button>' + '<p class="error" role="alert" id="workspace-error" hidden></p>';
   const favorite = root.querySelector('#favorite-resource'), error = root.querySelector('#workspace-error');
   const render = () => { favorite.textContent = saved ? 'Убрать из избранного' : 'В избранное'; favorite.setAttribute('aria-pressed', String(saved)); };
-  ctx.api.request(base + '/favorite' + query).then(result => { if (active()) { saved = result.isFavorite; render(); favorite.disabled = false; } }).catch(e => { if (active()) { error.hidden = false; error.textContent = errorMessage(e); } });
+  favorite.hidden = !canFavorite;
+  if (canFavorite) ctx.api.request(base + '/favorite' + query).then(result => { if (active()) { saved = result.isFavorite; render(); favorite.disabled = false; } }).catch(e => { if (active()) { error.hidden = false; error.textContent = errorMessage(e); } });
   async function act(button, action) {
     if (pending) return; pending = true; button.disabled = true; error.hidden = true;
     try { await action(); } catch (e) { if (active()) { error.hidden = false; error.textContent = errorMessage(e); } }
     finally { pending = false; if (active()) button.disabled = false; }
   }
-  favorite.onclick = () => act(favorite, async () => { await ctx.api.request(base + '/favorite' + (saved ? '' : query), { method: saved ? 'DELETE' : 'PUT' }); if (active()) { saved = !saved; render(); } });
-  const copy = root.querySelector('#copy-outfit');
+  const removeFavorite = action => confirmAction('Убрать из избранного?', 'Запись исчезнет из вашего списка избранного.', action, 'Убрать');
+  favorite.onclick = () => {
+    if (saved) { removeFavorite(async () => { await ctx.api.request(base + '/favorite', { method: 'DELETE' }); if (active()) { saved = false; render(); } }); return; }
+    return act(favorite, async () => { await ctx.api.request(base + '/favorite' + query, { method: 'PUT' }); if (active()) { saved = true; render(); } });
+  };
+  const copy = root.querySelector('#copy-resource');
   if (copy) copy.onclick = () => act(copy, async () => {
     operationId ||= crypto.randomUUID();
-    const result = await ctx.api.request(base + '/copies' + query, { method: 'POST', body: { operationId } });
-    if (active()) { operationId = null; ctx.toast('Образ и его вещи скопированы'); ctx.navigate(`/outfits/${result.id}`); }
+    const result = await ctx.api.request(base + '/copies' + copyQuery, { method: 'POST', body: { operationId } });
+    if (active()) { operationId = null; ctx.toast(kind === 'items' ? 'Вещь скопирована' : 'Образ и его вещи скопированы'); ctx.navigate(`/${kind}/${result.id}`); }
   });
   return () => { disposed = true; };
 }
@@ -30,12 +37,10 @@ export async function favoritesPage(ctx) {
   const kind = ctx.route.query.get('kind') === 'items' ? 'items' : 'outfits';
   const page = await ctx.get(`/favorites?kind=${kind}&page=${Number(ctx.route.query.get('page')) || 1}`);
   return { title: 'Избранное', html: `${title('Сохранённое для вас', 'Избранное')}<nav class="tabs">${link('/favorites', 'Образы', kind === 'outfits' ? 'selected' : '')}${link('/favorites?kind=items', 'Вещи', kind === 'items' ? 'selected' : '')}</nav>${page.items.length ? `<div class="cards">${page.items.map(x => `<article class="linebox favorite-card">${x.available ? `<a href="#${escape(x.route)}">${photo({ name: x.name, photoUrl: x.photoUrl }, '', true)}<h2>${escape(x.name)}</h2></a>` : '<h2>Недоступно</h2><p>Оригинал удалён или доступ к нему закрыт.</p>'}<button class="btn outline small" data-remove-favorite="${escape(x.targetId)}">Убрать из избранного</button></article>`).join('')}</div>` : empty('В избранном пока пусто', 'Сохраняйте вещи и образы на их страницах.')}${pagination(ctx.route, page)}<p class="error" role="alert" hidden id="favorites-error"></p>`, bind() {
-    document.querySelectorAll('[data-remove-favorite]').forEach(button => { button.onclick = async () => {
-      if (button.disabled) return; button.disabled = true;
-      try { await ctx.api.request(`/${kind}/${button.dataset.removeFavorite}/favorite`, { method: 'DELETE' }); if (ctx.isCurrent()) ctx.refresh(); }
-      catch (e) { if (ctx.isCurrent()) { const error = document.querySelector('#favorites-error'); error.hidden = false; error.textContent = errorMessage(e); } }
-      finally { button.disabled = false; }
-    }; });
+    document.querySelectorAll('[data-remove-favorite]').forEach(button => { button.onclick = () => confirmAction('Убрать из избранного?', 'Запись исчезнет из вашего списка избранного.', async () => {
+      await ctx.api.request(`/${kind}/${button.dataset.removeFavorite}/favorite`, { method: 'DELETE' });
+      if (ctx.isCurrent()) ctx.refresh();
+    }, 'Убрать'); });
   } };
 }
 export async function draftsPage(ctx) {
@@ -59,16 +64,16 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
   const request = (path, options) => ctx.api.request(path, options);
   function snapshot() {
     const value = name => form.elements[name]?.value || null;
-    return kind === 'items' ? { name: value('name'), description: value('description'), category: value('category'), color: value('color'), size: value('size'), brand: value('brand'), photoUrl: value('photoUrl'), photoMode: form.elements.photoMode.value, removePhoto: draft.removePhoto, isPublic: !id && form.elements.visibility?.value === 'public' }
-      : { name: value('name'), description: value('description'), itemIds: draft.selected.map(x => x.id), photoMode: 'file' };
+    return kind === 'items' ? { name: value('name'), description: value('description'), category: value('category'), color: value('color'), size: value('size'), brand: value('brand'), photoUrl: value('photoUrl'), photoMode: form.elements.photoMode.value, removePhoto: draft.removePhoto, isPublic: !id && Boolean(form.elements.visibility?.checked) }
+      : { name: value('name'), description: value('description'), itemIds: draft.selected.map(x => x.id), photoMode: 'file', isPublic: !id && Boolean(form.elements.visibility?.checked) };
   }
   async function apply(remote) {
     const content = remote.content;
     for (const name of ['name', 'description', 'category', 'color', 'size', 'brand', 'photoUrl']) if (form.elements[name]) { const control = form.elements[name], value = content[name] || ''; if (control.tagName === 'SELECT' && value && ![...control.options].some(option => option.value === value)) { const option = document.createElement('option'); option.value = value; option.textContent = value; control.append(option); } control.value = value; control.dispatchEvent(new control.ownerDocument.defaultView.Event('change')); }
     if (kind === 'items') {
-      if (form.elements.visibility) form.elements.visibility.value = content.isPublic ? 'public' : 'private';
+      if (form.elements.visibility) form.elements.visibility.checked = Boolean(content.isPublic);
       form.elements.photoMode.value = content.photoMode; draft.photoMode = content.photoMode; draft.file = null; uploadedFile = null;
-      draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl;
+      draft.removePhoto = content.removePhoto; draft.restoredPhotoUrl = remote.photoUrl; draft.discardStagedPhoto = false;
     } else {
       const items = await Promise.all((content.itemIds || []).map(async itemId => {
         try { return await ctx.get(`/items/${itemId}`); } catch (e) { if (e.status === 404 || e.status === 403) return { id: itemId, name: 'Недоступная вещь', category: '', photoUrl: null }; throw e; }
@@ -107,7 +112,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
       try {
         if (finalizing) {
           const result = await request(`/drafts/${draftId}`);
-          if (result.completedId) { completed = true; ctx.setDirty(false); ctx.navigate?.(`/${kind}/${result.completedId}`); return; }
+          if (result.completedId) { completed = true; ctx.setDirty(false); ctx.navigate?.(id ? `/${kind}/${result.completedId}` : kind === 'items' ? '/wardrobe' : '/outfits'); return; }
           finalizing = false; stored = result; blocked = false; busy(form, false); refresh(); await flush(); return;
         }
         if (blocked) { const result = await request(`/drafts/active?kind=${kind}${id ? `&targetId=${id}` : ''}`); if (result.draft) await offer(result.draft, true); else { blocked = false; busy(form, false); refresh(); await flush(); } }
@@ -120,7 +125,7 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (!active() || completed) return;
     generation++; ctx.setDirty(true); clearTimeout(timer);
     if (blocked || finalizing) return;
-    status('Есть несохранённые изменения…'); timer = setTimeout(() => { flush().catch(showFailure); }, 1000);
+    status('Черновик ещё не сохранён'); timer = setTimeout(() => { flush().catch(showFailure); }, 1000);
   }
   async function flush() {
     clearTimeout(timer);
@@ -128,19 +133,23 @@ export function createDraftSession({ ctx, kind, id, form, draft, baseline, refre
     if (finalizing || completed) return;
     if (running) { await running; if (active() && savedGeneration !== generation) return flush(); return; }
     if (stored && savedGeneration === generation) return;
-    const mine = generation, content = snapshot(), file = draft.file;
+    const mine = generation, content = snapshot(), file = draft.file, discardStagedPhoto = draft.discardStagedPhoto;
     status('Сохраняем черновик…');
     running = (async () => {
       stored = await request(`/drafts/${draftId}`, { method: 'PUT', body: { kind, targetId: id || null, version: stored?.version || null, baseVersion, content } });
       if (kind === 'items' && content.photoMode === 'file' && file && (file !== uploadedFile || !stored.photoUrl)) {
         const data = new FormData(); data.append('file', file);
         stored = await request(`/drafts/${draftId}/photo?version=${stored.version}`, { method: 'PUT', body: data }); uploadedFile = file;
-      } else if (stored.photoUrl && content.removePhoto) {
+        if (draft.file === file) draft.discardStagedPhoto = false;
+      } else if (stored.photoUrl && (content.removePhoto || discardStagedPhoto)) {
         stored = await request(`/drafts/${draftId}/photo?version=${stored.version}`, { method: 'DELETE' }); uploadedFile = null;
       }
       savedGeneration = mine;
       if (!active()) return;
-      if (mine === generation) { ctx.setDirty(false); status('Черновик сохранён'); }
+      if (mine === generation) {
+        ctx.setDirty(false);
+        status(`Черновик сохранён. Чтобы применить изменения, нажмите «${kind === 'items' ? 'Сохранить вещь' : 'Сохранить образ'}».`);
+      }
     })();
     try { await running; } finally { running = null; }
     if (active() && savedGeneration !== generation) return flush();

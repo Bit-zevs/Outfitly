@@ -39,13 +39,27 @@ function navigate(path, replace = false) {
   else location.hash = path;
 }
 
+const compactHeader = window.matchMedia?.('(max-width: 1100px)');
+
+function orderHeader() {
+  const nav = document.querySelector('#primary-nav');
+  if (!nav) return;
+  const account = nav.parentElement.querySelector('.header-account');
+  const menu = nav.parentElement.querySelector('#menu-button');
+  if (compactHeader?.matches) menu.before(account);
+  else nav.after(account);
+}
+
+compactHeader?.addEventListener('change', orderHeader);
+
 function header(route) {
   const nav = auth.user
     ? { primary: [['/dashboard', 'Обзор'], ['/wardrobe', 'Гардероб'], ['/outfits', 'Образы'], ['/discover', 'Открытая коллекция']], secondary: [['/statistics', 'Статистика'], ['/calendar', 'Календарь'], ['/favorites', 'Избранное'], ['/drafts', 'Черновики']] }
     : { primary: [['/', 'Главная'], ['/discover', 'Открытая коллекция']], secondary: [] };
   const isCurrent = path => route.path === path || path === '/wardrobe' && route.path.startsWith('/items') || path === '/outfits' && route.path.startsWith('/outfits/');
   const renderLinks = links => links.map(([path, name]) => `<a href="#${path}" ${isCurrent(path) ? 'aria-current="page"' : ''}>${name}</a>`).join('');
-  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/people', 'Люди'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
+  document.querySelector('#header').innerHTML = `<div class="header-inner"><a class="wordmark" href="#/" aria-label="Outfitly — главная">Outfitly<span>atelier</span></a><button class="menu-button icon-button" id="menu-button" aria-expanded="false" aria-controls="primary-nav" aria-label="Открыть меню">☰</button><nav id="primary-nav" class="primary-nav" aria-label="Основная навигация">${renderLinks(nav.primary)}${auth.user ? '' : link('/register', 'Зарегистрироваться', 'mobile-register')}</nav><div class="header-account">${auth.user ? `<details class="profile-menu"><summary aria-label="Меню профиля: ${escape(auth.user.displayName)}">${avatar(auth.user)}</summary><nav class="profile-menu-panel" aria-label="Меню профиля"><div role="group" aria-label="Аккаунт">${renderLinks([['/account', 'Мой профиль'], ['/people', 'Люди'], ['/settings', 'Настройки']])}</div><div class="profile-menu-group" role="group" aria-label="Гардероб">${renderLinks(nav.secondary)}</div><div class="profile-menu-group">${renderLinks([['/support', 'Поддержка']])}</div></nav></details>` : `${link('/login', 'Войти', 'login-link')}${link('/register', 'Начать', 'btn small register-link')}`}</div></div>`;
+  orderHeader();
   const button = document.querySelector('#menu-button');
   button.onclick = () => { const open = button.getAttribute('aria-expanded') !== 'true'; button.setAttribute('aria-expanded', String(open)); button.setAttribute('aria-label', open ? 'Закрыть меню' : 'Открыть меню'); button.textContent = open ? '×' : '☰'; document.querySelector('#primary-nav').classList.toggle('open', open); };
   document.querySelector('#header').onkeydown = event => { if (event.key === 'Escape') { const profile = document.querySelector('.profile-menu'); if (profile?.open) { profile.open = false; profile.querySelector('summary').focus(); return; } if (button.getAttribute('aria-expanded') !== 'true') return; button.setAttribute('aria-expanded', 'false'); button.setAttribute('aria-label', 'Открыть меню'); button.textContent = '☰'; document.querySelector('#primary-nav').classList.remove('open'); button.focus(); } };
@@ -87,9 +101,17 @@ async function resolve(ctx) {
   return notFound();
 }
 
-async function render() {
+async function render({ focus } = {}) {
   const nextRoute = parseRoute(location.hash);
-  const preserve = renderedRoute?.path === nextRoute.path && ['/wardrobe', '/discover'].includes(nextRoute.path) && renderedRoute.query.get('tab') === nextRoute.query.get('tab') && (renderedRoute.query.get('page') || '1') === (nextRoute.query.get('page') || '1');
+  const sameCatalog = renderedRoute?.path === nextRoute.path &&
+    ['/wardrobe', '/outfits', '/discover'].includes(nextRoute.path) &&
+    renderedRoute.query.get('tab') === nextRoute.query.get('tab');
+  const preserve = sameCatalog &&
+    (nextRoute.query.get('page') === renderedRoute.query.get('page') || (nextRoute.query.get('page') || '1') === '1');
+  const previousForm = sameCatalog && content.querySelector('#wardrobe-filters, #catalog-search');
+  const initialValues = previousForm ? new Map(new FormData(previousForm)) : null;
+  const sameFilters = sameCatalog && ['search', 'category', 'color', 'brand', 'size', 'colorMissing', 'brandMissing', 'sizeMissing', 'publication']
+    .every(key => renderedRoute.query.get(key) === nextRoute.query.get(key));
   const scroll = window.scrollY;
   const focusKey = document.activeElement?.closest('[data-filter-focus]')?.dataset.filterFocus;
   const mine = ++version;
@@ -101,8 +123,16 @@ async function render() {
   const signal = controller.signal;
   const isCurrent = () => version === mine && !signal.aborted;
   header(route);
-  content.innerHTML = '<div class="loading" role="status"><span class="spinner"></span>Собираем вашу коллекцию…</div>';
-  content.setAttribute('aria-busy', 'true');
+  const previousResults = sameCatalog && content.querySelector('[data-catalog-results]');
+  const update = previousResults && content.querySelector('[data-catalog-update]');
+  if (update) {
+    previousResults.setAttribute('aria-busy', 'true');
+    update.className = 'catalog-update pending';
+    update.textContent = 'Обновляем результаты…';
+  } else {
+    content.innerHTML = '<div class="loading" role="status"><span class="spinner"></span>Собираем вашу коллекцию…</div>';
+    content.setAttribute('aria-busy', 'true');
+  }
   try {
     if (!authRestored) {
       try { await auth.restore({ signal }); authRestored = true; }
@@ -117,23 +147,72 @@ async function render() {
     const ctx = { route, api, auth, drafts: createDraftSession, signal, isCurrent, get: path => api.request(path, { signal }), navigate, refresh: render, updateHeader: () => { if (isCurrent()) header(parseRoute(location.hash)); }, toast, setDirty: value => { if (isCurrent()) dirty = value; }, setSaving: value => { if (isCurrent()) saving = value; } };
     const page = await resolve(ctx);
     if (!isCurrent()) return;
-    header(route);
+    const latestValues = previousForm ? new FormData(previousForm) : null;
+    const advancedOpen = previousForm && previousForm.querySelector('details')?.open;
+    const latestFocus = content.contains(document.activeElement)
+      ? document.activeElement.closest('[data-filter-focus]')?.dataset.filterFocus
+      : focusKey;
     content.innerHTML = page.html;
+    const nextUpdate = content.querySelector('[data-catalog-update]');
+    if (update && nextUpdate) {
+      setTimeout(() => {
+        if (isCurrent()) nextUpdate.textContent = nextUpdate.dataset.resultMessage;
+      });
+    }
+    const nextForm = content.querySelector('#wardrobe-filters, #catalog-search');
+    if (latestValues && nextForm) {
+      for (const [key, value] of latestValues) {
+        if (key === 'sort' || (!sameFilters && value === initialValues.get(key))) continue;
+        const field = nextForm.elements[key];
+        if (!field) continue;
+        if (field.tagName === 'SELECT' && value && ![...field.options].some(option => option.value === value)) {
+          const selected = previousForm.elements[key].selectedOptions[0];
+          if (!selected) continue;
+          field.add(selected.cloneNode(true));
+        }
+        field.value = value;
+      }
+      if (sameFilters && advancedOpen) nextForm.querySelector('details').open = true;
+    }
     enhanceChoices(content);
     document.title = `${page.title} — Outfitly`;
     cleanup = page.cleanup;
     page.bind?.();
     renderedRoute = route;
-    const filterFocus = preserve && (Array.from(content.querySelectorAll('[data-filter-focus]'))
-      .find(element => !element.hidden && element.dataset.filterFocus === focusKey) || content.querySelector('[type="search"]'));
-    (filterFocus || content).focus({ preventScroll: true });
-    window.scrollTo({ top: preserve ? scroll : 0, behavior: 'instant' });
+    const filterFocus = preserve && latestFocus
+      ? [...content.querySelectorAll('[data-filter-focus]')].find(element =>
+        element.dataset.filterFocus === latestFocus && !element.hidden &&
+        (!element.closest('details:not([open])') || element.matches('details > summary:first-child'))
+      ) || content.querySelector('[type="search"]')
+      : null;
+    const restoredFocus = filterFocus || (focus && content.querySelector(focus));
+    (restoredFocus || content).focus({ preventScroll: true });
+    window.scrollTo({ top: restoredFocus ? scroll : 0, behavior: 'instant' });
+    restoredFocus?.scrollIntoView?.({ block: 'nearest' });
   } catch (error) {
     if (!isCurrent() || error.name === 'AbortError') return;
+    if (update) {
+      update.className = 'catalog-update failed';
+      update.innerHTML = '<span>Не удалось обновить результаты. Показана предыдущая выдача.</span><button type="button" class="btn outline small">Повторить</button>';
+      update.querySelector('button').onclick = render;
+      return;
+    }
     renderedRoute = null;
     if (error.status === 404) { const page = notFound(route.parts[0] === 'shared'); content.innerHTML = page.html; document.title = `${page.title} — Outfitly`; }
-    else { content.innerHTML = `<div class="empty"><h1>Не удалось открыть страницу</h1><p class="lead">${escape(errorMessage(error))}</p><button class="btn" id="retry-page">Попробовать снова</button></div>`; document.querySelector('#retry-page').onclick = render; }
-  } finally { if (isCurrent()) content.removeAttribute('aria-busy'); }
+    else {
+      document.title = 'Не удалось открыть страницу — Outfitly';
+      content.innerHTML = `<div class="empty"><h1>Не удалось открыть страницу</h1><p class="lead">${escape(errorMessage(error))}</p><button class="btn" id="retry-page">Попробовать снова</button></div>`;
+      document.querySelector('#retry-page').onclick = render;
+    }
+    const heading = content.querySelector('h1') || content;
+    heading.tabIndex = -1;
+    heading.focus();
+  } finally {
+    if (isCurrent()) {
+      content.removeAttribute('aria-busy');
+      previousResults?.removeAttribute?.('aria-busy');
+    }
+  }
 }
 
 function requestLeave(action) {
@@ -162,7 +241,9 @@ document.addEventListener('error', event => {
   if (event.target instanceof HTMLImageElement) {
     const img = event.target;
     if (img.closest('.user-avatar')) { img.remove(); return; }
-    const placeholder = document.createElement('span'); placeholder.className = 'photo-placeholder'; placeholder.innerHTML = photoPlaceholder(); placeholder.setAttribute('role', 'img'); placeholder.setAttribute('aria-label', img.alt ? `Фото недоступно: ${img.alt}` : 'Фото недоступно'); img.replaceWith(placeholder);
+    const template = document.createElement('template');
+    template.innerHTML = photoPlaceholder(!img.alt, 'Фото недоступно');
+    img.replaceWith(template.content);
   }
 }, true);
 document.querySelector('.skip-link').onclick = event => { event.preventDefault(); content.focus(); };
@@ -173,10 +254,14 @@ document.addEventListener('invalid', event => {
   const input = event.target;
   if (!input.matches('input,textarea,select') || !input.id) return;
   const trigger = input.tagName === 'SELECT' && input.hidden ? input.parentElement.querySelector('.choice-trigger') : null;
-  if (trigger) event.preventDefault();
+  if (trigger) {
+    event.preventDefault();
+    const firstInvalid = input.form?.querySelector('input:invalid, select:invalid, textarea:invalid');
+    if (input === firstInvalid) queueMicrotask(() => trigger.focus());
+  }
   const id = input.id + '-validation';
   let notice = document.getElementById(id);
-  if (!notice) { notice = document.createElement('small'); notice.id = id; notice.className = 'field-error'; input.after(notice); }
+  if (!notice) { notice = document.createElement('small'); notice.id = id; notice.className = 'field-error'; (trigger?.parentElement || input).after(notice); }
   notice.textContent = input.validationMessage;
   input.setAttribute('aria-invalid', 'true');
   const descriptions = new Set((input.getAttribute('aria-describedby') || '').split(' ').filter(Boolean));

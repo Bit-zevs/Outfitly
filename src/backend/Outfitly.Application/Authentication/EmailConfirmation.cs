@@ -1,15 +1,16 @@
 namespace Outfitly.Application.Authentication;
 
 public enum AccountEmailPurpose { Confirmation, PasswordReset, EmailChange }
-public sealed record ConfirmationEmail(string Email, string Token, AccountEmailPurpose Purpose = AccountEmailPurpose.Confirmation);
-public sealed record RegisteredAccount(Guid Id, string Email, string DisplayName, string Username, ConfirmationEmail Confirmation);
+public sealed record ConfirmationEmail(string Email, string Token, AccountEmailPurpose Purpose = AccountEmailPurpose.Confirmation,
+    DateTime IssuedAtUtc = default, DateTime ExpiresAtUtc = default);
+public sealed record IssuedPasswordReset(string Token, string TokenHash, DateTime IssuedAtUtc, DateTime ExpiresAtUtc);
+public sealed record RegisteredAccount(Guid Id, string Email, string DisplayName, ConfirmationEmail Confirmation);
 
 public interface IConfirmationEmailSender
 {
     Task SendAsync(ConfirmationEmail email, CancellationToken cancellationToken);
 }
 
-public sealed class EmailNotConfirmedException : Exception;
 public sealed class InvalidConfirmationTokenException : Exception;
 public sealed class InvalidPasswordResetTokenException : Exception;
 public sealed class ConfirmationTooFrequentException : Exception;

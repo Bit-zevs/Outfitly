@@ -28,7 +28,6 @@ export function enhanceChoices(root) {
     };
     function sync() {
       decorate(trigger, select.selectedOptions[0]?.textContent || 'Выберите значение');
-      trigger.setAttribute('aria-label', name + ': ' + trigger.textContent);
       trigger.disabled = select.disabled;
       for (const attribute of ['aria-describedby', 'aria-invalid', 'aria-errormessage']) {
         if (select.hasAttribute(attribute)) trigger.setAttribute(attribute, select.getAttribute(attribute));
@@ -41,7 +40,7 @@ export function enhanceChoices(root) {
     function open() {
       list.replaceChildren();
       [...select.options].forEach(option => {
-        const button = document.createElement('button'); button.type = 'button'; button.setAttribute('role','option'); button.setAttribute('aria-selected',String(option.selected)); button.disabled = option.disabled; decorate(button,option.textContent);
+        const button = document.createElement('button'); button.type = 'button'; button.tabIndex = -1; button.setAttribute('role','option'); button.setAttribute('aria-selected',String(option.selected)); button.disabled = option.disabled; decorate(button,option.textContent);
         button.onclick = event => { event.preventDefault(); select.value = option.value; sync(); close(true); select.dispatchEvent(new select.ownerDocument.defaultView.Event('input',{bubbles:true})); select.dispatchEvent(new select.ownerDocument.defaultView.Event('change',{bubbles:true})); };
         list.append(button);
       });
@@ -50,8 +49,8 @@ export function enhanceChoices(root) {
     }
     trigger.onclick = event => { event.preventDefault(); list.hidden ? open() : close(); };
     wrapper.onkeydown = event => {
-      if (event.key === 'Escape') { event.stopPropagation(); event.preventDefault(); close(true); return; }
-      if (event.key === 'Tab') { close(); return; }
+      if (event.key === 'Escape' && !list.hidden) { event.stopPropagation(); event.preventDefault(); close(true); return; }
+      if (event.key === 'Tab' && !list.hidden) { close(true); return; }
       if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
         event.preventDefault(); if (list.hidden) { open(); return; }
         const buttons = [...list.querySelectorAll('button:not(:disabled)')], index = buttons.indexOf(document.activeElement);

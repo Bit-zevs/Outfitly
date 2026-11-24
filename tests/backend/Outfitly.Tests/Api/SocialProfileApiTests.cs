@@ -98,14 +98,14 @@ public sealed class SocialProfileApiTests
     }
 
     [Fact]
-    public async Task A_losing_avatar_upload_returns_409_and_cleans_only_its_own_file()
+    public async Task Concurrent_avatar_upload_for_the_same_account_is_rejected()
     {
         var before = new BeforeCommit();
         using var factory = new ApiFactory(testAuthentication: false, configureDatabase: o => o.AddInterceptors(before)); await factory.InitializeDatabaseAsync();
         using var client = await Register(factory, "anna");
         (await Upload(client)).EnsureSuccessStatusCode();
-        before.Action = async () => { (await Upload(client)).EnsureSuccessStatusCode(); };
-        Assert.Equal(HttpStatusCode.Conflict, (await Upload(client)).StatusCode);
+        before.Action = async () => Assert.Equal(HttpStatusCode.TooManyRequests, (await Upload(client)).StatusCode);
+        (await Upload(client)).EnsureSuccessStatusCode();
         var remaining = Assert.Single(Directory.GetFiles(factory.PhotoRoot));
         using var scope = factory.Services.CreateScope();
         Assert.Equal(Path.GetFileName(remaining), (await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().Users.SingleAsync()).AvatarStorageKey);
@@ -157,7 +157,7 @@ public sealed class SocialProfileApiTests
     {
         var client = factory.CreateClient(); await ApiFactory.SetCsrfAsync(client);
         (await client.PostAsJsonAsync("/api/auth/register", new { email = name + "@example.com", username = name, displayName = name, password = "long password 123" })).EnsureSuccessStatusCode();
-        await factory.ConfirmEmailAsync(client, name + "@example.com");
+        await factory.ConfirmEmailAsync(client, name + "@example.com", "long password 123", name);
         (await client.PostAsJsonAsync("/api/auth/login", new { email = name + "@example.com", password = "long password 123" })).EnsureSuccessStatusCode();
         await ApiFactory.SetCsrfAsync(client); return client;
     }

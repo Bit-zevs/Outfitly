@@ -14,6 +14,7 @@ internal sealed class PostInteractionConfiguration : IEntityTypeConfiguration<Po
         b.Property(x => x.UpdatedAt).HasConversion(x => x.HasValue ? x.Value.UtcDateTime : (DateTime?)null, x => x.HasValue ? new DateTimeOffset(DateTime.SpecifyKind(x.Value, DateTimeKind.Utc)) : null);
         b.HasKey(x => x.Id); b.Property(x => x.Id).ValueGeneratedNever();
         b.Property(x => x.Kind).HasMaxLength(10); b.Property(x => x.Text).HasMaxLength(2000);
+        b.Property(x => x.Audience).HasMaxLength(40).HasDefaultValue("owner");
         b.Property(x => x.Text).IsConcurrencyToken(); b.Property(x => x.IsDeleted).IsConcurrencyToken();
         b.HasOne<WardrobeItem>().WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne<Outfit>().WithMany().HasForeignKey(x => x.OutfitId).OnDelete(DeleteBehavior.Cascade);
@@ -21,7 +22,7 @@ internal sealed class PostInteractionConfiguration : IEntityTypeConfiguration<Po
         b.HasOne<PostInteraction>().WithMany().HasForeignKey(x => x.ParentId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => new { x.ItemId, x.UserId, x.Kind }).IsUnique().HasFilter("\"Kind\" <> 'comment'");
         b.HasIndex(x => new { x.OutfitId, x.UserId, x.Kind }).IsUnique().HasFilter("\"Kind\" <> 'comment'");
-        b.HasIndex(x => new { x.ItemId, x.ParentId, x.CreatedAt, x.Id });
-        b.HasIndex(x => new { x.OutfitId, x.ParentId, x.CreatedAt, x.Id });
+        b.HasIndex(x => new { x.ItemId, x.Audience, x.ParentId, x.CreatedAt, x.Id });
+        b.HasIndex(x => new { x.OutfitId, x.Audience, x.ParentId, x.CreatedAt, x.Id });
     }
 }

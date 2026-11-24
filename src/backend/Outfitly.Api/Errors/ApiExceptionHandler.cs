@@ -13,17 +13,18 @@ public sealed class ApiExceptionHandler : IExceptionHandler
     {
         var status = exception switch
         {
-            EmailNotConfirmedException => StatusCodes.Status403Forbidden,
             InvalidConfirmationTokenException => StatusCodes.Status400BadRequest,
             InvalidCurrentPasswordException => StatusCodes.Status400BadRequest,
             InvalidEmailChangeTokenException => StatusCodes.Status400BadRequest,
             InvalidPasswordResetTokenException => StatusCodes.Status400BadRequest,
             ConfirmationTooFrequentException => StatusCodes.Status429TooManyRequests,
+            PhotoProcessingBusyException => StatusCodes.Status429TooManyRequests,
             EmailDeliveryException => StatusCodes.Status503ServiceUnavailable,
             PhotoTooLargeException => StatusCodes.Status413PayloadTooLarge,
             UnsupportedPhotoException => StatusCodes.Status415UnsupportedMediaType,
             BadHttpRequestException bad => bad.StatusCode,
             WardrobeConcurrencyException => StatusCodes.Status409Conflict,
+            CopyCapacityExceededException => StatusCodes.Status409Conflict,
             AccountConflictException => StatusCodes.Status409Conflict,
             UsernameConflictException => StatusCodes.Status409Conflict,
             ArgumentException => StatusCodes.Status400BadRequest,
@@ -41,7 +42,7 @@ public sealed class ApiExceptionHandler : IExceptionHandler
             409 => "The operation conflicts with the current state",
             413 => "Photo is too large",
             415 => "Unsupported photo format",
-            429 => "Too many account requests",
+            429 => "Too many requests",
             503 => "Email delivery unavailable",
             _ => "An unexpected error occurred"
         };
@@ -52,14 +53,16 @@ public sealed class ApiExceptionHandler : IExceptionHandler
             InvalidEmailChangeTokenException => "invalid_email_change_token",
             AccountConflictException => "email_taken",
             UsernameConflictException => "username_taken",
-            EmailNotConfirmedException => "email_not_confirmed",
+            CopyCapacityExceededException => "copy_capacity_exceeded",
             InvalidConfirmationTokenException => "invalid_confirmation_token",
             InvalidPasswordResetTokenException => "invalid_password_reset_token",
             ConfirmationTooFrequentException => "confirmation_too_frequent",
+            PhotoProcessingBusyException => "photo_processing_busy",
             EmailDeliveryException => "email_delivery_failed",
             _ => null
         };
         if (exception is ConfirmationTooFrequentException) context.Response.Headers.RetryAfter = "60";
+        if (exception is PhotoProcessingBusyException) context.Response.Headers.RetryAfter = "2";
         await context.Response.WriteAsJsonAsync(new ProblemDetails
         {
             Status = status,
