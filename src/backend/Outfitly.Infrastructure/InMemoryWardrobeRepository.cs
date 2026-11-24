@@ -13,6 +13,18 @@ public sealed class InMemoryWardrobeRepository : IWardrobeRepository
     public IReadOnlyCollection<Outfit> GetOutfits() => _outfits.ToArray();
     public IReadOnlyCollection<ShareLink> GetLinks() => _links.ToArray();
 
+    public WardrobeItem? FindItemForChange(Guid id) => ReadItem(id);
+    public ShareLink? FindLinkForChange(Guid id) => _links.SingleOrDefault(link => link.Id == id);
+    public IReadOnlyCollection<ShareLink> FindTargetLinks(ShareTargetType type, Guid id) =>
+        _links.Where(link => link.TargetType == type && link.TargetId == id).ToArray();
+    public IReadOnlyCollection<Outfit> FindOutfitsContaining(Guid ownerId, Guid itemId) =>
+        _outfits.Where(outfit => outfit.OwnerId == ownerId && outfit.ItemIds.Contains(itemId)).ToArray();
+    public IReadOnlyCollection<WardrobeItem> FindItemsForChange(IReadOnlyCollection<Guid> ids) => ReadItems(ids);
+    public IReadOnlyCollection<WardrobeItem> FindItems(Guid? ownerId = null, bool publicOnly = false) =>
+        _items.Where(item => (ownerId == null || item.OwnerId == ownerId) && (!publicOnly || item.IsPublic)).ToArray();
+    public IReadOnlyCollection<Outfit> FindOutfits(Guid? ownerId = null, bool publicOnly = false) =>
+        _outfits.Where(outfit => (ownerId == null || outfit.OwnerId == ownerId) && (!publicOnly || outfit.IsPublic)).ToArray();
+
     public ShareLink? FindActiveLink(string token, ShareTargetType targetType) =>
         _links.SingleOrDefault(link => link.Token == token && link.TargetType == targetType && link.IsActive);
     public WardrobeItem? ReadItem(Guid id, bool publicOnly = false) =>

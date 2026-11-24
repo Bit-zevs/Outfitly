@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Outfitly.Application;
 using Outfitly.Domain;
@@ -9,9 +10,29 @@ namespace Outfitly.Infrastructure.Persistence;
 /// </summary>
 public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeRepository
 {
-    public IReadOnlyCollection<WardrobeItem> GetAll() => Read(context.WardrobeItems);
-    public IReadOnlyCollection<Outfit> GetOutfits() => Read(context.Outfits);
-    public IReadOnlyCollection<ShareLink> GetLinks() => Read(context.ShareLinks);
+    public WardrobeItem? FindItemForChange(Guid id) => context.WardrobeItems.Find(id);
+
+    public ShareLink? FindLinkForChange(Guid id) => context.ShareLinks.Find(id);
+
+    public IReadOnlyCollection<ShareLink> FindTargetLinks(ShareTargetType type, Guid id) =>
+        ReadTracked(context.ShareLinks, link => link.TargetType == type && link.TargetId == id);
+
+    public IReadOnlyCollection<Outfit> FindOutfitsContaining(Guid ownerId, Guid itemId)
+    {
+        var outfits = context.Outfits;
+        outfits.Where(outfit => outfit.OwnerId == ownerId &&
+            EF.Property<List<WardrobeItem>>(outfit, "_items").Any(item => item.Id == itemId)).Load();
+        return outfits.Local.Where(outfit => outfit.OwnerId == ownerId && outfit.ItemIds.Contains(itemId)).ToArray();
+    }
+
+    public IReadOnlyCollection<WardrobeItem> FindItemsForChange(IReadOnlyCollection<Guid> ids) =>
+        ids.Count == 0 ? [] : ReadTracked(context.WardrobeItems, item => ids.Contains(item.Id));
+
+    public IReadOnlyCollection<WardrobeItem> FindItems(Guid? ownerId = null, bool publicOnly = false) =>
+        ReadTracked(context.WardrobeItems, item => (ownerId == null || item.OwnerId == ownerId) && (!publicOnly || item.IsPublic));
+
+    public IReadOnlyCollection<Outfit> FindOutfits(Guid? ownerId = null, bool publicOnly = false) =>
+        ReadTracked(context.Outfits, outfit => (ownerId == null || outfit.OwnerId == ownerId) && (!publicOnly || outfit.IsPublic));
 
     public ShareLink? FindActiveLink(string token, ShareTargetType targetType) =>
         context.ShareLinks.AsNoTracking().SingleOrDefault(link =>
@@ -24,7 +45,8 @@ public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeR
         context.Outfits.AsNoTracking().SingleOrDefault(outfit => outfit.Id == id && (!publicOnly || outfit.IsPublic));
 
     public Outfit? FindOutfitForChange(Guid id) =>
-        context.Outfits.AsTracking().SingleOrDefault(outfit => outfit.Id == id);
+        context.Outfits.Local.SingleOrDefault(outfit => outfit.Id == id) ??
+        ReadTracked(context.Outfits, outfit => outfit.Id == id).SingleOrDefault();
 
     public IReadOnlyCollection<WardrobeItem> ReadItems(IReadOnlyCollection<Guid> ids) =>
         context.WardrobeItems.AsNoTracking().Where(item => ids.Contains(item.Id)).ToArray();
@@ -69,11 +91,10 @@ public sealed class EfWardrobeRepository(OutfitlyDbContext context) : IWardrobeR
         context.Outfits.Remove(outfit);
     }
 
-    private static IReadOnlyCollection<TEntity> Read<TEntity>(DbSet<TEntity> set) where TEntity : class
+    private static IReadOnlyCollection<TEntity> ReadTracked<TEntity>(DbSet<TEntity> set,
+        Expression<Func<TEntity, bool>> predicate) where TEntity : class
     {
-        // Local includes pending additions and excludes pending deletions.
-        // Tracking is required because the existing service mutates returned domain entities.
-        set.AsTracking().Load();
-        return set.Local.ToArray();
+        set.Where(predicate).AsTracking().Load();
+        return set.Local.Where(predicate.Compile()).ToArray();
     }
 }

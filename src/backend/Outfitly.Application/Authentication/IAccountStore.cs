@@ -9,9 +9,10 @@ public interface IAccountStore
     Task<User?> FindUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<bool> UsernameExistsAsync(string username, Guid exceptUserId, CancellationToken cancellationToken);
     Task<Account?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken);
-    Task<Account?> FindByConfirmationHashAsync(string hash, CancellationToken cancellationToken);
+    Task<Account?> FindByConfirmationHashAsync(string hash, DateTime now, CancellationToken cancellationToken);
+    void Add(PreviousConfirmationToken token);
     Task<Account?> FindByPasswordResetHashAsync(string hash, CancellationToken cancellationToken);
-    Task RevokeSessionsAsync(Guid userId, CancellationToken cancellationToken);
+    Task RevokeSessionsAsync(Guid userId, DateTime now, CancellationToken cancellationToken);
     void MarkCredentialsChecked(Account account);
     Task<AccountView?> GetUserAsync(Guid userId, CancellationToken cancellationToken);
     Task<LoginSession?> FindSessionAsync(Guid sessionId, CancellationToken cancellationToken);

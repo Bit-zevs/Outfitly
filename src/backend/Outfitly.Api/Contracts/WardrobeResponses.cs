@@ -22,17 +22,21 @@ public static class WardrobeResponses
         page.Total, page.Page, page.PageSize
     };
 
-    public static string? ExternalPhotoInput(string? url, Guid id, HttpRequest request, ItemView? current = null)
+    public static string? ExternalPhotoInput(string? url, Guid id, HttpRequest request,
+        string? publicUrl, ItemView? current = null)
     {
         var candidate = url?.Trim();
         if (candidate == $"/api/items/{id}/photo" && current?.HasUploadedPhoto == true) return null;
         var origin = new Uri($"{request.Scheme}://{request.Host}");
         var isInternal = Uri.TryCreate(candidate, UriKind.Absolute, out var uri) &&
-            uri.Scheme.Equals(origin.Scheme, StringComparison.OrdinalIgnoreCase) &&
-            uri.IdnHost.Equals(origin.IdnHost, StringComparison.OrdinalIgnoreCase) && uri.Port == origin.Port &&
-            uri.AbsolutePath.StartsWith($"{request.PathBase}/api/", StringComparison.OrdinalIgnoreCase);
+            (SameOrigin(uri, origin) || Uri.TryCreate(publicUrl, UriKind.Absolute, out var configured) && SameOrigin(uri, configured)) &&
+            new PathString(Uri.UnescapeDataString(uri.AbsolutePath)).StartsWithSegments(request.PathBase.Add("/api"));
         if (candidate is not null && (candidate.StartsWith('/') || isInternal))
             throw new ArgumentException("Use the upload endpoint to assign an internal photo.");
         return url;
     }
+
+    private static bool SameOrigin(Uri left, Uri right) =>
+        left.Scheme.Equals(right.Scheme, StringComparison.OrdinalIgnoreCase) &&
+        left.IdnHost.Equals(right.IdnHost, StringComparison.OrdinalIgnoreCase) && left.Port == right.Port;
 }

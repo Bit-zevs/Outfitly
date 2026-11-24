@@ -51,7 +51,7 @@ internal static class ItemDraftConcurrencyScenario
         }
         await using (var stale = open())
         {
-            Service(stale).Save(data.Owner, draftId, draft.Version);
+            Service(stale).Save(data.Owner, draftId, draft.Version, _ => { });
             await using (var winner = open())
             {
                 var item = await winner.WardrobeItems.SingleAsync(x => x.Id == data.ItemId);

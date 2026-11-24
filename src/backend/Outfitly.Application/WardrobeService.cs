@@ -94,7 +94,7 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
 
     public void DeactivateShareLink(Guid actorId, Guid linkId)
     {
-        var link = repository.GetLinks().SingleOrDefault(link => link.Id == linkId)
+        var link = repository.FindLinkForChange(linkId)
             ?? throw new KeyNotFoundException("Share link not found.");
         RequireTargetOwner(actorId, link.TargetType, link.TargetId);
         link.Deactivate();
@@ -107,7 +107,7 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
         var item = Item(itemId);
         RequireOwner(actorId, item.OwnerId);
         photos?.RemoveAfterCommit(item.PhotoStorageKey);
-        foreach (var outfit in repository.GetOutfits().Where(outfit => outfit.ItemIds.Contains(itemId)))
+        foreach (var outfit in repository.FindOutfitsContaining(actorId, itemId))
         {
             outfit.RemoveItem(itemId);
             repository.MarkOutfitChanged(outfit);
@@ -131,13 +131,13 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     public IReadOnlyCollection<ItemView> GetMyItems(Guid actorId)
     {
         RequireActor(actorId);
-        return repository.GetAll().Where(item => item.OwnerId == actorId).Select(View).ToArray();
+        return repository.FindItems(ownerId: actorId).Select(View).ToArray();
     }
 
     public IReadOnlyCollection<OutfitView> GetMyOutfits(Guid actorId)
     {
         RequireActor(actorId);
-        return Views(repository.GetOutfits().Where(outfit => outfit.OwnerId == actorId));
+        return Views(repository.FindOutfits(ownerId: actorId));
     }
 
     public ItemView GetItem(Guid actorId, Guid itemId)
@@ -155,10 +155,10 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     }
 
     public IReadOnlyCollection<ItemView> GetPublicItems() =>
-        repository.GetAll().Where(item => item.IsPublic).Select(View).ToArray();
+        repository.FindItems(publicOnly: true).Select(View).ToArray();
 
     public IReadOnlyCollection<OutfitView> GetPublicOutfits() =>
-        Views(repository.GetOutfits().Where(outfit => outfit.IsPublic));
+        Views(repository.FindOutfits(publicOnly: true));
 
     public ItemView? GetSharedItem(string token)
     {
@@ -179,11 +179,11 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
         repository.FindActiveLink(token, targetType);
 
     private WardrobeItem Item(Guid id) =>
-        repository.GetAll().SingleOrDefault(item => item.Id == id)
+        repository.FindItemForChange(id)
         ?? throw new KeyNotFoundException("Wardrobe item not found.");
 
     private Outfit Outfit(Guid id) =>
-        repository.GetOutfits().SingleOrDefault(outfit => outfit.Id == id)
+        repository.FindOutfitForChange(id)
         ?? throw new KeyNotFoundException("Outfit not found.");
 
     private void RequireTargetOwner(Guid actorId, ShareTargetType targetType, Guid targetId)
@@ -211,7 +211,7 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
 
     private void DeactivateLinks(ShareTargetType type, Guid id)
     {
-        foreach (var link in repository.GetLinks().Where(link => link.TargetType == type && link.TargetId == id))
+        foreach (var link in repository.FindTargetLinks(type, id))
             link.Deactivate();
     }
 
@@ -229,7 +229,7 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     public IReadOnlyCollection<ShareLinkView> GetShareLinks(Guid actorId, ShareTargetType type, Guid id)
     {
         RequireTargetOwner(actorId, type, id);
-        return repository.GetLinks().Where(link => link.IsActive && link.TargetType == type && link.TargetId == id)
+        return repository.FindTargetLinks(type, id).Where(link => link.IsActive)
             .OrderBy(link => link.Id).Select(link => new ShareLinkView(link.Id, link.Token)).ToArray();
     }
 
@@ -262,7 +262,7 @@ public sealed class WardrobeService(IWardrobeRepository repository, PhotoChanges
     {
         var selected = outfits.ToArray();
         if (selected.Length == 0) return [];
-        var items = repository.GetAll().ToDictionary(item => item.Id);
+        var items = repository.FindItemsForChange(selected.SelectMany(outfit => outfit.ItemIds).Distinct().ToArray()).ToDictionary(item => item.Id);
         return selected.Select(outfit => View(outfit, items)).ToArray();
     }
 

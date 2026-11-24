@@ -68,7 +68,7 @@ public sealed class UsernameApiTests
         Assert.Equal(HttpStatusCode.Accepted, existing.StatusCode);
         Assert.Equal(await first.Content.ReadAsStringAsync(), await existing.Content.ReadAsStringAsync());
 
-        var token = factory.Mail.Emails["second@example.com"].Token;
+        var token = (await factory.Mail.WaitForAsync("second@example.com")).Token;
         var conflict = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, password, username = nick });
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         Assert.Equal("username_taken", (await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());

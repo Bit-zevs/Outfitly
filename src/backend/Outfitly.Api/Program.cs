@@ -51,12 +51,9 @@ var emailOptions = new Outfitly.Infrastructure.Authentication.SmtpConfirmationOp
 builder.Configuration.GetSection("EmailConfirmation").Bind(emailOptions);
 builder.Services.AddSingleton(emailOptions);
 builder.Services.AddScoped<IConfirmationEmailSender, Outfitly.Infrastructure.Authentication.SmtpConfirmationEmailSender>();
-builder.Services.AddSingleton<AnonymousAccountMail>();
-builder.Services.AddSingleton<IAnonymousAccountMail>(provider => provider.GetRequiredService<AnonymousAccountMail>());
-builder.Services.AddHostedService(provider => provider.GetRequiredService<AnonymousAccountMail>());
-builder.Services.AddScoped<Outfitly.Infrastructure.Authentication.PasswordResetOutbox>();
-builder.Services.AddScoped<PasswordResetMail>();
-builder.Services.AddHostedService<PasswordResetMailWorker>();
+builder.Services.AddScoped<Outfitly.Infrastructure.Authentication.AccountMailOutbox>();
+builder.Services.AddScoped<AccountMail>();
+builder.Services.AddHostedService<AccountMailWorker>();
 builder.Services.AddScoped<SessionCookieEvents>();
 builder.Services.AddDataProtection().SetApplicationName("Outfitly");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
@@ -90,7 +87,11 @@ builder.Services.AddRateLimiter(options =>
             : RateLimitPartition.GetNoLimiter("other")),
         PartitionedRateLimiter.Create<HttpContext, string>(context => IsPhotoUpload(context)
             ? RateLimitPartition.GetConcurrencyLimiter("actor:" + CurrentActor.Id(context.User), _ => new ConcurrencyLimiterOptions { PermitLimit = 1, QueueLimit = 0 })
-            : RateLimitPartition.GetNoLimiter("other")));
+            : RateLimitPartition.GetNoLimiter("other")),
+        PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            context.GetEndpoint()?.Metadata.GetMetadata<EnableRateLimitingAttribute>()?.PolicyName == "wardrobe-copy"
+                ? RateLimitPartition.GetConcurrencyLimiter("wardrobe-copies", _ => new ConcurrencyLimiterOptions { PermitLimit = 2, QueueLimit = 0 })
+                : RateLimitPartition.GetNoLimiter("other")));
     options.AddPolicy("account-access", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         {
@@ -99,7 +100,7 @@ builder.Services.AddRateLimiter(options =>
     options.AddPolicy("public-media-read", context => RateLimitPartition.GetFixedWindowLimiter(
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
         { PermitLimit = 240, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
-    foreach (var limit in new[] { (Name: "support-create", Count: 5), (Name: "support-messages", Count: 30), (Name: "photo-upload", Count: 60) })
+    foreach (var limit in new[] { (Name: "support-create", Count: 5), (Name: "support-messages", Count: 30), (Name: "photo-upload", Count: 60), (Name: "wardrobe-copy", Count: 30) })
         options.AddPolicy(limit.Name, context => RateLimitPartition.GetFixedWindowLimiter(
             context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "anonymous", _ => new FixedWindowRateLimiterOptions
             { PermitLimit = limit.Count, Window = TimeSpan.FromHours(1), QueueLimit = 0 }));

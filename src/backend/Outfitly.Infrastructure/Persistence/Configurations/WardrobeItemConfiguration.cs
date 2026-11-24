@@ -21,6 +21,7 @@ internal sealed class WardrobeItemConfiguration : IEntityTypeConfiguration<Wardr
         builder.Property(item => item.PhotoUrl);
         builder.Property(item => item.PhotoStorageKey).IsConcurrencyToken();
         builder.Property(item => item.IsPublic);
+        builder.Property<bool>("HasCopiedPhoto").HasDefaultValue(false);
         builder.Property<Guid>("Revision").HasDefaultValue(Guid.Empty).IsConcurrencyToken();
         builder.HasAlternateKey(item => new { item.Id, item.OwnerId });
         builder.HasIndex(item => new { item.OwnerId, item.Category });

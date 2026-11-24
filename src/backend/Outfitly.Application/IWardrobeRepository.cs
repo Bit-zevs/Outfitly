@@ -4,9 +4,13 @@ namespace Outfitly.Application;
 
 public interface IWardrobeRepository
 {
-    IReadOnlyCollection<WardrobeItem> GetAll();
-    IReadOnlyCollection<Outfit> GetOutfits();
-    IReadOnlyCollection<ShareLink> GetLinks();
+    WardrobeItem? FindItemForChange(Guid id);
+    ShareLink? FindLinkForChange(Guid id);
+    IReadOnlyCollection<ShareLink> FindTargetLinks(ShareTargetType type, Guid id);
+    IReadOnlyCollection<Outfit> FindOutfitsContaining(Guid ownerId, Guid itemId);
+    IReadOnlyCollection<WardrobeItem> FindItemsForChange(IReadOnlyCollection<Guid> ids);
+    IReadOnlyCollection<WardrobeItem> FindItems(Guid? ownerId = null, bool publicOnly = false);
+    IReadOnlyCollection<Outfit> FindOutfits(Guid? ownerId = null, bool publicOnly = false);
     // Bounded, read-only queries for anonymous share access.
     ShareLink? FindActiveLink(string token, ShareTargetType targetType);
     WardrobeItem? ReadItem(Guid id, bool publicOnly = false);

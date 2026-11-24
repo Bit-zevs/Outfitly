@@ -30,6 +30,18 @@ internal sealed class AccountConfiguration : IEntityTypeConfiguration<Account>
     }
 }
 
+internal sealed class PreviousConfirmationTokenConfiguration : IEntityTypeConfiguration<PreviousConfirmationToken>
+{
+    public void Configure(EntityTypeBuilder<PreviousConfirmationToken> builder)
+    {
+        builder.ToTable("PreviousConfirmationTokens");
+        builder.HasKey(token => token.Hash);
+        builder.Property(token => token.Hash).HasMaxLength(64);
+        builder.HasIndex(token => token.ExpiresAtUtc);
+        builder.HasOne<Account>().WithMany().HasForeignKey(token => token.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class LoginSessionConfiguration : IEntityTypeConfiguration<LoginSession>
 {
     public void Configure(EntityTypeBuilder<LoginSession> builder)
@@ -37,6 +49,7 @@ internal sealed class LoginSessionConfiguration : IEntityTypeConfiguration<Login
         builder.ToTable("LoginSessions");
         builder.HasKey(session => session.Id);
         builder.Property(session => session.Id).ValueGeneratedNever();
+        builder.HasIndex(session => session.ExpiresAtUtc);
         builder.HasOne<Account>().WithMany().HasForeignKey(session => session.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }

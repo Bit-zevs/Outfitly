@@ -41,26 +41,55 @@ public sealed class PasswordResetPersistenceTests
         await using (var write = database.Open())
         {
             var reset = (await Service(write, clock).RequestPasswordResetAsync(Email))!;
-            new PasswordResetOutbox(write).Stage(reset.TokenHash, "protected fixture", reset.IssuedAtUtc, reset.ExpiresAtUtc);
+            new AccountMailOutbox(write).Stage(reset.TokenHash, "protected fixture", reset.IssuedAtUtc, reset.ExpiresAtUtc);
             await write.SaveChangesAsync();
         }
         var now = clock.GetUtcNow().UtcDateTime;
-        PendingPasswordReset pending;
+        PendingAccountMail pending;
         await using (var first = database.Open())
         {
-            var outbox = new PasswordResetOutbox(first);
-            pending = Assert.IsType<PendingPasswordReset>(await outbox.NextAsync(now, default));
+            var outbox = new AccountMailOutbox(first);
+            pending = Assert.IsType<PendingAccountMail>(await outbox.NextAsync(now, default));
             Assert.Equal(1, await outbox.DeferAsync(pending, now.AddSeconds(30), default));
         }
         await using var next = database.Open();
-        var reopened = new PasswordResetOutbox(next);
+        var reopened = new AccountMailOutbox(next);
         Assert.Equal(0, await reopened.DeferAsync(pending, now.AddSeconds(30), default));
         Assert.Null(await reopened.NextAsync(now, default));
-        var retry = Assert.IsType<PendingPasswordReset>(await reopened.NextAsync(now.AddSeconds(30), default));
+        var retry = Assert.IsType<PendingAccountMail>(await reopened.NextAsync(now.AddSeconds(30), default));
         Assert.Equal(pending.TokenHash, retry.TokenHash);
         Assert.Equal(pending.ProtectedToken, retry.ProtectedToken);
         Assert.Equal(1, await reopened.CompleteAsync(retry.TokenHash, default));
         Assert.Null(await reopened.NextAsync(now.AddSeconds(31), default));
+    }
+
+    [Fact]
+    public async Task Credential_cleanup_removes_only_expired_sessions_and_previous_tokens()
+    {
+        await using var database = await TestDatabase.CreateAsync();
+        var clock = new Clock();
+        var now = clock.Now.UtcDateTime;
+        await Seed(database.Open, clock);
+        Guid currentSession;
+        await using (var seed = database.Open())
+        {
+            var actor = (await seed.Accounts.AsNoTracking().SingleAsync()).UserId;
+            currentSession = Guid.NewGuid();
+            seed.LoginSessions.AddRange(
+                new LoginSession { Id = Guid.NewGuid(), UserId = actor, ExpiresAtUtc = now },
+                new LoginSession { Id = currentSession, UserId = actor, ExpiresAtUtc = now.AddMinutes(1) });
+            seed.AddRange(
+                new PreviousConfirmationToken(new string('A', 64), actor, now),
+                new PreviousConfirmationToken(new string('B', 64), actor, now.AddMinutes(1)));
+            await seed.SaveChangesAsync();
+        }
+
+        await using (var maintenance = database.Open())
+            await new AccountMailOutbox(maintenance).PruneCredentialsAsync(now, default);
+
+        await using var read = database.Open();
+        Assert.Equal(currentSession, (await read.LoginSessions.SingleAsync()).Id);
+        Assert.Equal(new string('B', 64), (await read.Set<PreviousConfirmationToken>().SingleAsync()).Hash);
     }
 
     [Fact]

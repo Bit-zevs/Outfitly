@@ -66,6 +66,7 @@ public sealed class OutfitReadTests
             Assert.All(outfit.Items, item => Assert.False(item.IsPublic));
         }
         Assert.InRange(counter.Reads, 1, maximumReads);
+        Assert.DoesNotContain(read.ChangeTracker.Entries<WardrobeItem>(), entry => entry.Entity.OwnerId == otherOwner);
     }
 
     private sealed class SelectCounter : DbCommandInterceptor

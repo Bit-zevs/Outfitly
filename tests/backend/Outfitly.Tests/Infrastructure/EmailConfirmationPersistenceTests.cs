@@ -53,9 +53,10 @@ public sealed class EmailConfirmationPersistenceTests
         Assert.Equal(!firstResend, (await read.Accounts.SingleAsync()).EmailConfirmed);
         if (firstResend)
         {
-            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() => Service(read, clock).ConfirmEmailAsync(token, "a race test password", "race"));
-            await Service(read, clock).ConfirmEmailAsync(replacement!.Token, "an expiry test password", "race");
+            await Service(read, clock).ConfirmEmailAsync(token, "a race test password", "race");
             await read.SaveChangesAsync();
+            await Assert.ThrowsAsync<InvalidConfirmationTokenException>(() =>
+                Service(read, clock).ConfirmEmailAsync(replacement!.Token, "an expiry test password", "race"));
         }
     }
 

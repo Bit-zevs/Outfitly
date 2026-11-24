@@ -47,7 +47,7 @@ public sealed partial class AccountService
         account.EmailChangeTokenHash = TokenHash(token);
         account.EmailChangeIssuedAtUtc = now;
         account.EmailChangeExpiresAtUtc = now.AddHours(24);
-        return new ConfirmationEmail(address, token, AccountEmailPurpose.EmailChange);
+        return new ConfirmationEmail(address, token, AccountEmailPurpose.EmailChange, now, account.EmailChangeExpiresAtUtc.Value);
     }
 
     public async Task<Guid> ConfirmEmailChangeAsync(string token, CancellationToken cancellationToken = default)
@@ -98,7 +98,7 @@ public sealed partial class AccountService
         account.PasswordResetExpiresAtUtc = null;
         account.PasswordResetIssuedAtUtc = null;
         ClearEmailChange(account);
-        await store.RevokeSessionsAsync(account.UserId, cancellationToken);
+        await store.RevokeSessionsAsync(account.UserId, clock.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
     private static void ClearEmailChange(Account account)

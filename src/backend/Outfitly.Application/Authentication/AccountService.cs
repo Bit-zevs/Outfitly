@@ -31,6 +31,9 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         if (account is null || account.EmailConfirmed) return null;
         if (account.ConfirmationIssuedAtUtc is { } issued && issued.AddSeconds(60) > clock.GetUtcNow().UtcDateTime)
             throw new ConfirmationTooFrequentException();
+        if (account.ConfirmationTokenHash is { } hash && account.ConfirmationExpiresAtUtc is { } expires &&
+            expires > clock.GetUtcNow().UtcDateTime)
+            store.Add(new PreviousConfirmationToken(hash, account.UserId, expires));
         return IssueConfirmation(account);
     }
 
@@ -38,9 +41,8 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
     {
         if (token is null || token.Length != 43 || token.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-' && c != '_'))
             throw new InvalidConfirmationTokenException();
-        var account = await store.FindByConfirmationHashAsync(TokenHash(token), cancellationToken);
-        if (account is null || account.EmailConfirmed || account.ConfirmationExpiresAtUtc is not { } expires ||
-            expires <= clock.GetUtcNow().UtcDateTime) throw new InvalidConfirmationTokenException();
+        var account = await store.FindByConfirmationHashAsync(TokenHash(token), clock.GetUtcNow().UtcDateTime, cancellationToken);
+        if (account is null || account.EmailConfirmed) throw new InvalidConfirmationTokenException();
         ValidatePassword(password);
         var normalized = Usernames.Normalize(username);
         var user = await store.FindUserAsync(account.UserId, cancellationToken) ?? throw new InvalidConfirmationTokenException();
@@ -59,7 +61,8 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
         account.ConfirmationTokenHash = TokenHash(token);
         account.ConfirmationIssuedAtUtc = clock.GetUtcNow().UtcDateTime;
         account.ConfirmationExpiresAtUtc = account.ConfirmationIssuedAtUtc.Value.AddHours(24);
-        return new ConfirmationEmail(account.Email, token);
+        return new ConfirmationEmail(account.Email, token, AccountEmailPurpose.Confirmation,
+            account.ConfirmationIssuedAtUtc.Value, account.ConfirmationExpiresAtUtc.Value);
     }
 
     private static string TokenHash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));

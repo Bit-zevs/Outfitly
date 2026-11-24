@@ -77,12 +77,12 @@ public sealed class PasswordResetApiTests
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
-            var delivery = await db.Set<PasswordResetDelivery>().SingleAsync();
+            var delivery = await db.Set<AccountMailDelivery>().SingleAsync();
             var account = await db.Accounts.SingleAsync();
             Assert.Equal(account.PasswordResetTokenHash, delivery.TokenHash);
             Assert.DoesNotContain(unsent.Token, delivery.ProtectedToken);
             factory.Mail.Fail = false;
-            await db.Set<PasswordResetDelivery>().ExecuteUpdateAsync(update => update.SetProperty(row => row.DueAtUtc, DateTime.UtcNow));
+            await db.Set<AccountMailDelivery>().ExecuteUpdateAsync(update => update.SetProperty(row => row.DueAtUtc, DateTime.UtcNow));
         }
         Assert.Equal(unsent, await WaitForResetMail(factory));
         Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/reset-password",

@@ -38,17 +38,17 @@ public static class WardrobeEndpoints
             catalog.GetFilterOptionsAsync(CurrentActor.Id(context.User), context.RequestAborted));
         items.MapGet("/{id:guid}", (Guid id, ClaimsPrincipal user, WardrobeService service) =>
             WardrobeResponses.Item(service.GetItem(CurrentActor.Id(user), id), $"/api/items/{id}/photo"));
-        items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPost("/", (ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service, IConfiguration configuration) =>
         {
             var actor = CurrentActor.Id(user);
             var item = service.CreateItem(actor, request.Name, request.Category, request.Color,
-                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty, httpRequest));
+                request.Size, request.Brand, request.Description, WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, Guid.Empty, httpRequest, configuration["EmailConfirmation:PublicUrl"]));
             return Results.Created($"/api/items/{item.Id}", WardrobeResponses.Item(service.GetItem(actor, item.Id), $"/api/items/{item.Id}/photo"));
         }).AddEndpointFilter<CommitChangesFilter>();
-        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service) =>
+        items.MapPut("/{id:guid}", (Guid id, ItemRequest request, HttpRequest httpRequest, ClaimsPrincipal user, WardrobeService service, IConfiguration configuration) =>
         {
             var actor = CurrentActor.Id(user);
-            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, httpRequest, service.GetItem(actor, id));
+            var photoUrl = WardrobeResponses.ExternalPhotoInput(request.PhotoUrl, id, httpRequest, configuration["EmailConfirmation:PublicUrl"], service.GetItem(actor, id));
             service.UpdateItem(actor, id, request.Name, request.Category, request.Color,
                 request.Size, request.Brand, request.Description, photoUrl);
             return Results.NoContent();

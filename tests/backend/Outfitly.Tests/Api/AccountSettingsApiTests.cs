@@ -88,7 +88,7 @@ public sealed class AccountSettingsApiTests
         using var other = factory.CreateClient();
         await ApiFactory.SetCsrfAsync(other);
         (await other.PostAsJsonAsync("/api/auth/login", new { email = Email, password = Password })).EnsureSuccessStatusCode();
-        var mail = factory.Mail.Emails["New@example.com"];
+        var mail = await factory.Mail.WaitForAsync("New@example.com");
         Assert.Equal(AccountEmailPurpose.EmailChange, mail.Purpose);
         var confirmed = await client.PostAsJsonAsync("/api/auth/confirm-email-change", new { mail.Token });
         Assert.Equal(HttpStatusCode.NoContent, confirmed.StatusCode);
@@ -124,7 +124,7 @@ public sealed class AccountSettingsApiTests
         var again = await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password });
         Assert.Equal(HttpStatusCode.Accepted, again.StatusCode);
         Assert.Equal(await first.Content.ReadAsStringAsync(), await again.Content.ReadAsStringAsync());
-        var token = factory.Mail.Emails["occupied@example.com"].Token;
+        var token = (await factory.Mail.WaitForAsync("occupied@example.com")).Token;
         var conflict = await client.PostAsJsonAsync("/api/auth/confirm-email-change", new { token });
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         Assert.Equal("email_taken", (await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
@@ -139,7 +139,7 @@ public sealed class AccountSettingsApiTests
         using var owner = factory.CreateClient();
         await RegisterAndLogin(factory, owner);
         (await owner.PostAsJsonAsync("/api/auth/me/email-change", new { email = "new@example.com", currentPassword = Password })).EnsureSuccessStatusCode();
-        var token = factory.Mail.Emails["new@example.com"].Token;
+        var token = (await factory.Mail.WaitForAsync("new@example.com")).Token;
         using var other = factory.CreateClient();
         Assert.Equal(HttpStatusCode.BadRequest, (await other.PostAsJsonAsync("/api/auth/confirm-email-change", new { token })).StatusCode);
         using (var scope = factory.Services.CreateScope())

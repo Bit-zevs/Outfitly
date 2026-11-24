@@ -27,17 +27,15 @@ public static class AuthEndpoints
             return Results.Ok(new { token = antiforgery.GetAndStoreTokens(context).RequestToken });
         });
         auth.MapPost("/register", async (RegisterRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, IAnonymousAccountMail mail, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, AccountMail mail, CancellationToken cancellationToken) =>
         {
-            ConfirmationEmail confirmation;
             try
             {
                 var user = await accounts.RegisterAsync(request.Email, request.DisplayName, cancellationToken);
+                mail.Stage(user.Confirmation);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-                confirmation = user.Confirmation;
             }
             catch (AccountConflictException) { return ConfirmationAccepted(); }
-            await mail.EnqueueAsync(confirmation, cancellationToken);
             return ConfirmationAccepted();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/confirm-email", async (ConfirmEmailRequest request, AccountService accounts,
@@ -48,21 +46,23 @@ public static class AuthEndpoints
             return Results.NoContent();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/resend-confirmation", async (ResendConfirmationRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, IAnonymousAccountMail mail, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, AccountMail mail, CancellationToken cancellationToken) =>
         {
-            ConfirmationEmail? email;
             try
             {
-                email = await accounts.ResendConfirmationAsync(request.Email, cancellationToken);
-                if (email is not null) await unitOfWork.SaveChangesAsync(cancellationToken);
+                var email = await accounts.ResendConfirmationAsync(request.Email, cancellationToken);
+                if (email is not null)
+                {
+                    mail.Stage(email);
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
             catch (ConfirmationTooFrequentException) { return ConfirmationAccepted(); }
             catch (WardrobeConcurrencyException) { return ConfirmationAccepted(); }
-            if (email is not null) await mail.EnqueueAsync(email, cancellationToken);
             return ConfirmationAccepted();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/forgot-password", async (ResendConfirmationRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, PasswordResetMail mail, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, AccountMail mail, CancellationToken cancellationToken) =>
         {
             try
             {

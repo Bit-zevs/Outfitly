@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
 using Outfitly.Application.Authentication;
-using Outfitly.Api.Authentication;
 
 namespace Outfitly.Tests.Api;
 
-internal sealed class RecordingConfirmationSender : IConfirmationEmailSender, IAnonymousAccountMail
+internal sealed class RecordingConfirmationSender : IConfirmationEmailSender
 {
     internal ConcurrentDictionary<string, ConfirmationEmail> Emails { get; } = new(StringComparer.OrdinalIgnoreCase);
     internal bool Fail { get; set; }
@@ -18,9 +17,11 @@ internal sealed class RecordingConfirmationSender : IConfirmationEmailSender, IA
         Emails[email.Email] = email;
     }
 
-    public async ValueTask EnqueueAsync(ConfirmationEmail email, CancellationToken cancellationToken)
+    internal async Task<ConfirmationEmail> WaitForAsync(string address, string? previousToken = null)
     {
-        try { await SendAsync(email, cancellationToken); }
-        catch (EmailDeliveryException) { }
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (!Emails.TryGetValue(address, out var email) || email.Token == previousToken)
+            await Task.Delay(25, timeout.Token);
+        return Emails[address];
     }
 }

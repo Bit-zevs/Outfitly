@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Outfitly.Infrastructure.Authentication;
 using Outfitly.Infrastructure.Persistence;
 
 namespace Outfitly.Tests.Api;
@@ -16,7 +17,7 @@ public sealed class EmailConfirmationApiTests
     [Fact]
     public async Task Registration_response_does_not_wait_for_mail_delivery()
     {
-        using var factory = new ApiFactory(testAuthentication: false, backgroundMail: true);
+        using var factory = new ApiFactory(testAuthentication: false);
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -32,8 +33,40 @@ public sealed class EmailConfirmationApiTests
             Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
             await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.Empty(factory.Mail.Emails);
+            using var scope = factory.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            Assert.Single(await db.Set<AccountMailDelivery>().AsNoTracking().ToListAsync());
         }
         finally { release.TrySetResult(); }
+    }
+
+    [Fact]
+    public async Task Failed_confirmation_delivery_is_retried_from_the_committed_outbox()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var client = factory.CreateClient();
+        var attempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        factory.Mail.Fail = true;
+        factory.Mail.ObserveDelivery = _ => attempted.TrySetResult();
+
+        Assert.Equal(HttpStatusCode.Accepted, (await Register(client)).StatusCode);
+        await attempted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Empty(factory.Mail.Emails);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            var delivery = await db.Set<AccountMailDelivery>().AsNoTracking().SingleAsync();
+            Assert.True(delivery.DueAtUtc > DateTime.UtcNow);
+            factory.Mail.Fail = false;
+            await db.Set<AccountMailDelivery>().ExecuteUpdateAsync(row =>
+                row.SetProperty(mail => mail.DueAtUtc, DateTime.UtcNow));
+        }
+
+        var email = await factory.Mail.WaitForAsync(Email);
+        var confirmed = await client.PostAsJsonAsync("/api/auth/confirm-email",
+            new { email.Token, Password, username = "confirm" });
+        Assert.Equal(HttpStatusCode.NoContent, confirmed.StatusCode);
     }
 
     [Theory]
@@ -46,7 +79,7 @@ public sealed class EmailConfirmationApiTests
         await factory.InitializeDatabaseAsync();
         using var client = factory.CreateClient();
         await Register(client);
-        var original = factory.Mail.Emails[Email];
+        var original = await factory.Mail.WaitForAsync(Email);
         await AllowResend(factory);
         failure.Enabled = true;
         var response = resend ? await Resend(client) : await client.PostAsJsonAsync("/api/auth/confirm-email", new { original.Token, Password, username = "confirm" });
@@ -84,7 +117,7 @@ public sealed class EmailConfirmationApiTests
         using var client = factory.CreateClient();
         var registered = await Register(client);
         Assert.Equal(HttpStatusCode.Accepted, registered.StatusCode);
-        var token = factory.Mail.Emails[Email].Token;
+        var token = (await factory.Mail.WaitForAsync(Email)).Token;
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
@@ -117,7 +150,7 @@ public sealed class EmailConfirmationApiTests
     }
 
     [Fact]
-    public async Task Smtp_failure_keeps_account_and_resend_replaces_token_after_cooldown()
+    public async Task Smtp_failure_keeps_account_and_resend_preserves_unexpired_links()
     {
         using var factory = new ApiFactory(testAuthentication: false);
         await factory.InitializeDatabaseAsync();
@@ -131,13 +164,13 @@ public sealed class EmailConfirmationApiTests
         await AllowResend(factory);
         factory.Mail.Fail = false;
         Assert.Equal(HttpStatusCode.Accepted, (await Resend(client)).StatusCode);
-        var oldToken = factory.Mail.Emails[Email].Token;
+        var oldToken = (await factory.Mail.WaitForAsync(Email)).Token;
         await AllowResend(factory);
         Assert.Equal(HttpStatusCode.Accepted, (await Resend(client)).StatusCode);
-        var newToken = factory.Mail.Emails[Email].Token;
+        var newToken = (await factory.Mail.WaitForAsync(Email, oldToken)).Token;
         Assert.NotEqual(oldToken, newToken);
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = oldToken, Password, username = "confirm" })).StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = newToken, Password, username = "confirm" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = oldToken, Password, username = "confirm" })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/confirm-email", new { token = newToken, Password, username = "confirm" })).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await Resend(client)).StatusCode);
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/resend-confirmation", new { email = "missing@example.com" })).StatusCode);
         Assert.Equal(newToken, factory.Mail.Emails[Email].Token);
@@ -168,7 +201,7 @@ public sealed class EmailConfirmationApiTests
             (await db.Accounts.SingleAsync()).ConfirmationExpiresAtUtc = DateTime.UtcNow.AddSeconds(-1);
             await db.SaveChangesAsync();
         }
-        foreach (var token in new[] { factory.Mail.Emails[Email].Token, "invalid", new string('A', 43) })
+        foreach (var token in new[] { (await factory.Mail.WaitForAsync(Email)).Token, "invalid", new string('A', 43) })
         {
             var response = await client.PostAsJsonAsync("/api/auth/confirm-email", new { token, Password, username = "confirm" });
             Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

@@ -149,9 +149,32 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExpiresAtUtc");
+
                     b.HasIndex("UserId");
 
                     b.ToTable("LoginSessions", (string)null);
+                });
+
+            modelBuilder.Entity("Outfitly.Application.Authentication.PreviousConfirmationToken", b =>
+                {
+                    b.Property<string>("Hash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Hash");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("PreviousConfirmationTokens", (string)null);
                 });
 
             modelBuilder.Entity("Outfitly.Domain.CopyReceipt", b =>
@@ -315,6 +338,13 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Audience")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("owner");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -361,9 +391,9 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasFilter("\"Kind\" <> 'comment'");
 
-                    b.HasIndex("ItemId", "ParentId", "CreatedAt", "Id");
+                    b.HasIndex("ItemId", "Audience", "ParentId", "CreatedAt", "Id");
 
-                    b.HasIndex("OutfitId", "ParentId", "CreatedAt", "Id");
+                    b.HasIndex("OutfitId", "Audience", "ParentId", "CreatedAt", "Id");
 
                     b.ToTable("PostInteractions", null, t =>
                         {
@@ -506,6 +536,12 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<Guid>("CopyRevision")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-000000000000"));
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -562,6 +598,11 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
+                    b.Property<bool>("HasCopiedPhoto")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("IsPublic")
                         .HasColumnType("boolean");
 
@@ -595,7 +636,7 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.ToTable("WardrobeItems", (string)null);
                 });
 
-            modelBuilder.Entity("Outfitly.Infrastructure.Authentication.PasswordResetDelivery", b =>
+            modelBuilder.Entity("Outfitly.Infrastructure.Authentication.AccountMailDelivery", b =>
                 {
                     b.Property<string>("TokenHash")
                         .HasMaxLength(64)
@@ -610,6 +651,11 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.Property<string>("ProtectedToken")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("Purpose")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.HasKey("TokenHash");
 
@@ -647,6 +693,15 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                 });
 
             modelBuilder.Entity("Outfitly.Application.Authentication.LoginSession", b =>
+                {
+                    b.HasOne("Outfitly.Application.Authentication.Account", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Outfitly.Application.Authentication.PreviousConfirmationToken", b =>
                 {
                     b.HasOne("Outfitly.Application.Authentication.Account", null)
                         .WithMany()

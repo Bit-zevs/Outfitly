@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Outfitly.Api.Authentication;
+using Outfitly.Api.Contracts;
 using Outfitly.Application;
 namespace Outfitly.Api.Endpoints;
 public static class WorkspaceEndpoints
@@ -18,15 +19,16 @@ public static class WorkspaceEndpoints
             group.MapDelete($"/{kind}/{{id:guid}}/favorite", (Guid id, HttpContext h, WorkspaceService s) => { s.Favorite(CurrentActor.Id(h.User), kind, id, null, true); return Results.NoContent(); }).AddEndpointFilter<CommitChangesFilter>();
         }
         group.MapPost("/items/{id:guid}/copies", async (Guid id, string? shareToken, Guid? publicOutfitId, CopyRequest request, HttpContext h, WorkspaceService s, CancellationToken ct) =>
-            Results.Ok(new { Id = await s.CopyItemAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, publicOutfitId, ct) })).AddEndpointFilter<CommitChangesFilter>();
+            Results.Ok(new { Id = await s.CopyItemAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, publicOutfitId, ct) })).RequireRateLimiting("wardrobe-copy").AddEndpointFilter<CommitChangesFilter>();
         group.MapPost("/outfits/{id:guid}/copies", async (Guid id, string? shareToken, CopyRequest request, HttpContext h, WorkspaceService s, CancellationToken ct) =>
-            Results.Ok(new { Id = await s.CopyAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, ct) })).AddEndpointFilter<CommitChangesFilter>();
+            Results.Ok(new { Id = await s.CopyAsync(CurrentActor.Id(h.User), id, request.OperationId, shareToken, ct) })).RequireRateLimiting("wardrobe-copy").AddEndpointFilter<CommitChangesFilter>();
         group.MapGet("/drafts", (int? page, HttpContext h, WorkspaceService s) => s.Drafts(CurrentActor.Id(h.User), page ?? 1));
         group.MapGet("/drafts/active", (string kind, Guid? targetId, HttpContext h, WorkspaceService s) => new { Draft = s.Active(CurrentActor.Id(h.User), kind, targetId) });
         group.MapGet("/drafts/{id:guid}", (Guid id, HttpContext h, WorkspaceService s) => s.Read(CurrentActor.Id(h.User), id));
         group.MapPut("/drafts/{id:guid}", (Guid id, DraftInput input, HttpContext h, WorkspaceService s) => s.Update(CurrentActor.Id(h.User), id, input)).AddEndpointFilter<CommitChangesFilter>();
         group.MapDelete("/drafts/{id:guid}", (Guid id, Guid version, HttpContext h, WorkspaceService s) => { s.Delete(CurrentActor.Id(h.User), id, version); return Results.NoContent(); }).AddEndpointFilter<CommitChangesFilter>();
-        group.MapPost("/drafts/{id:guid}/save", (Guid id, VersionRequest input, HttpContext h, WorkspaceService s) => Results.Ok(new { Id = s.Save(CurrentActor.Id(h.User), id, input.Version) })).AddEndpointFilter<CommitChangesFilter>();
+        group.MapPost("/drafts/{id:guid}/save", (Guid id, VersionRequest input, HttpContext h, WorkspaceService s, IConfiguration configuration) => Results.Ok(new { Id = s.Save(CurrentActor.Id(h.User), id, input.Version,
+            url => WardrobeResponses.ExternalPhotoInput(url, Guid.Empty, h.Request, configuration["EmailConfirmation:PublicUrl"])) })).AddEndpointFilter<CommitChangesFilter>();
         group.MapGet("/drafts/{id:guid}/photo", async (Guid id, HttpContext h, WorkspaceService s, IPhotoStore files, CancellationToken ct) => {
             h.Response.Headers.CacheControl = "no-store"; h.Response.Headers.XContentTypeOptions = "nosniff";
             var key = s.Photo(CurrentActor.Id(h.User), id); var photo = key == null ? null : await files.ReadAsync(key, ct);

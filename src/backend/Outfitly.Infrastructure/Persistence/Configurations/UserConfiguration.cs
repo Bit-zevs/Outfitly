@@ -15,6 +15,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.Username).HasMaxLength(30).IsRequired();
         builder.Property(user => user.Bio).HasMaxLength(500);
         builder.Property(user => user.AvatarStorageKey).IsConcurrencyToken();
+        builder.Property<Guid>("CopyRevision").HasDefaultValue(Guid.Empty).IsConcurrencyToken();
         builder.HasIndex(user => user.Username).IsUnique();
     }
 }
