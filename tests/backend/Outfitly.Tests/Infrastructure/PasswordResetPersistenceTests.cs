@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Outfitly.Application;
 using Outfitly.Application.Authentication;
+using Outfitly.Infrastructure.Authentication;
 using Outfitly.Infrastructure.Persistence;
 using static Outfitly.Tests.Infrastructure.EmailConfirmationPersistenceTests;
 
@@ -22,6 +23,44 @@ public sealed class PasswordResetPersistenceTests
         var email = await service.RequestPasswordResetAsync(Email);
         await db.SaveChangesAsync();
         return email!.Token;
+    }
+
+    [PostgreSqlFact]
+    public async Task Delivery_is_visible_after_commit_and_can_be_reclaimed_when_retry_is_due()
+    {
+        await using var database = await PostgreSqlDatabase.CreateAsync();
+        var clock = new Clock();
+        await using (var seed = database.Open())
+        {
+            var service = Service(seed, clock);
+            var registered = await service.RegisterAsync(Email, "Reset");
+            await seed.SaveChangesAsync();
+            await service.ConfirmEmailAsync(registered.Confirmation.Token, Password, "reset");
+            await seed.SaveChangesAsync();
+        }
+        await using (var write = database.Open())
+        {
+            var reset = (await Service(write, clock).RequestPasswordResetAsync(Email))!;
+            new PasswordResetOutbox(write).Stage(reset.TokenHash, "protected fixture", reset.IssuedAtUtc, reset.ExpiresAtUtc);
+            await write.SaveChangesAsync();
+        }
+        var now = clock.GetUtcNow().UtcDateTime;
+        PendingPasswordReset pending;
+        await using (var first = database.Open())
+        {
+            var outbox = new PasswordResetOutbox(first);
+            pending = Assert.IsType<PendingPasswordReset>(await outbox.NextAsync(now, default));
+            Assert.Equal(1, await outbox.DeferAsync(pending, now.AddSeconds(30), default));
+        }
+        await using var next = database.Open();
+        var reopened = new PasswordResetOutbox(next);
+        Assert.Equal(0, await reopened.DeferAsync(pending, now.AddSeconds(30), default));
+        Assert.Null(await reopened.NextAsync(now, default));
+        var retry = Assert.IsType<PendingPasswordReset>(await reopened.NextAsync(now.AddSeconds(30), default));
+        Assert.Equal(pending.TokenHash, retry.TokenHash);
+        Assert.Equal(pending.ProtectedToken, retry.ProtectedToken);
+        Assert.Equal(1, await reopened.CompleteAsync(retry.TokenHash, default));
+        Assert.Null(await reopened.NextAsync(now.AddSeconds(31), default));
     }
 
     [Fact]

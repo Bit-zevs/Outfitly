@@ -595,6 +595,31 @@ namespace Outfitly.Infrastructure.Persistence.Migrations
                     b.ToTable("WardrobeItems", (string)null);
                 });
 
+            modelBuilder.Entity("Outfitly.Infrastructure.Authentication.PasswordResetDelivery", b =>
+                {
+                    b.Property<string>("TokenHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("DueAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ProtectedToken")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("TokenHash");
+
+                    b.HasIndex("DueAtUtc");
+
+                    b.HasIndex("ExpiresAtUtc");
+
+                    b.ToTable("PasswordResetDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("OutfitItems", b =>
                 {
                     b.HasOne("Outfitly.Domain.Outfit", null)

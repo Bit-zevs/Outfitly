@@ -79,7 +79,7 @@ public sealed class AccountSettingsApiTests
         await RegisterAndLogin(factory, client);
         var sent = await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = " New@example.com ", currentPassword = Password });
         Assert.Equal(HttpStatusCode.Accepted, sent.StatusCode);
-        Assert.True((await sent.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("confirmationEmailSent").GetBoolean());
+        Assert.Equal("New@example.com", (await sent.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("pendingEmail").GetString());
         var me = (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!;
         Assert.Equal(Email, me.Email); Assert.Equal("New@example.com", me.PendingEmail);
         var publicUser = await client.GetFromJsonAsync<JsonElement>("/api/users/original");
@@ -111,19 +111,25 @@ public sealed class AccountSettingsApiTests
         using var client = factory.CreateClient();
         await RegisterAndLogin(factory, client);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = Email.ToUpperInvariant(), currentPassword = Password })).StatusCode);
-        (await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password })).EnsureSuccessStatusCode();
-        var token = factory.Mail.Emails["occupied@example.com"].Token;
+        var first = await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password });
+        Assert.Equal(HttpStatusCode.Accepted, first.StatusCode);
         using (var scope = factory.Services.CreateScope())
         {
             var accounts = scope.ServiceProvider.GetRequiredService<AccountService>();
             await accounts.RegisterAsync("occupied@example.com", "Other");
-            await scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>().SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            (await db.Accounts.SingleAsync(x => x.Email == Email)).EmailChangeIssuedAtUtc = DateTime.UtcNow.AddMinutes(-2);
+            await db.SaveChangesAsync();
         }
+        var again = await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password });
+        Assert.Equal(HttpStatusCode.Accepted, again.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await again.Content.ReadAsStringAsync());
+        var token = factory.Mail.Emails["occupied@example.com"].Token;
         var conflict = await client.PostAsJsonAsync("/api/auth/confirm-email-change", new { token });
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         Assert.Equal("email_taken", (await conflict.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
         Assert.Equal(Email, (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!.Email);
-        Assert.Equal(HttpStatusCode.Conflict, (await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password })).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "occupied@example.com", currentPassword = Password })).StatusCode);
     }
 
     [Fact]
@@ -156,7 +162,7 @@ public sealed class AccountSettingsApiTests
     }
 
     [Fact]
-    public async Task Failed_delivery_is_reported_and_cancellation_invalidates_the_saved_request()
+    public async Task Failed_delivery_does_not_change_the_response_and_cancellation_invalidates_the_request()
     {
         using var factory = new ApiFactory(testAuthentication: false);
         using var client = factory.CreateClient();
@@ -164,7 +170,7 @@ public sealed class AccountSettingsApiTests
         factory.Mail.Fail = true;
         var response = await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "new@example.com", currentPassword = Password });
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.False((await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("confirmationEmailSent").GetBoolean());
+        Assert.False((await response.Content.ReadFromJsonAsync<JsonElement>()).TryGetProperty("confirmationEmailSent", out _));
         Assert.Equal("new@example.com", (await client.GetFromJsonAsync<AccountView>("/api/auth/me"))!.PendingEmail);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await client.PostAsJsonAsync("/api/auth/me/email-change", new { email = "new@example.com", currentPassword = Password })).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/auth/me/email-change")).StatusCode);

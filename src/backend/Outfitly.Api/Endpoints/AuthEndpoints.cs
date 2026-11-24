@@ -62,17 +62,18 @@ public static class AuthEndpoints
             return ConfirmationAccepted();
         }).RequireRateLimiting("account-access");
         auth.MapPost("/forgot-password", async (ResendConfirmationRequest request, AccountService accounts,
-            IUnitOfWork unitOfWork, IAnonymousAccountMail mail, CancellationToken cancellationToken) =>
+            IUnitOfWork unitOfWork, PasswordResetMail mail, CancellationToken cancellationToken) =>
         {
-            ConfirmationEmail? email = null;
             try
             {
                 var pending = await accounts.RequestPasswordResetAsync(request.Email, cancellationToken);
-                if (pending is not null) await unitOfWork.SaveChangesAsync(cancellationToken);
-                email = pending;
+                if (pending is not null)
+                {
+                    mail.Stage(pending);
+                    await unitOfWork.SaveChangesAsync(cancellationToken);
+                }
             }
             catch (WardrobeConcurrencyException) { /* Another request already updated the account. */ }
-            if (email is not null) await mail.EnqueueAsync(email, cancellationToken);
             return Results.Json(new { message = "If the account is eligible, a password reset email has been sent." }, statusCode: 202);
         }).RequireRateLimiting("account-access");
         auth.MapPost("/reset-password", async (ResetPasswordRequest request, AccountService accounts,

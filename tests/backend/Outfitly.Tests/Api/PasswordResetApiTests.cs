@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Outfitly.Application.Authentication;
 using Outfitly.Infrastructure.Persistence;
+using Outfitly.Infrastructure.Authentication;
 
 namespace Outfitly.Tests.Api;
 
@@ -11,6 +12,17 @@ public sealed class PasswordResetApiTests
 {
     private const string Email = "reset@example.com";
     private const string Password = "original password";
+
+    private static async Task<ConfirmationEmail> WaitForResetMail(ApiFactory factory)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        while (true)
+        {
+            if (factory.Mail.Emails.TryGetValue(Email, out var mail) && mail.Purpose == AccountEmailPurpose.PasswordReset)
+                return mail;
+            await Task.Delay(50, timeout.Token);
+        }
+    }
 
     private static async Task Register(HttpClient client, ApiFactory factory)
     {
@@ -29,7 +41,7 @@ public sealed class PasswordResetApiTests
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync("/api/auth/login", new { email = Email, password = Password })).StatusCode);
         await ApiFactory.SetCsrfAsync(client);
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = Email })).StatusCode);
-        var email = factory.Mail.Emails[Email];
+        var email = await WaitForResetMail(factory);
         Assert.Equal(AccountEmailPurpose.PasswordReset, email.Purpose);
         using (var scope = factory.Services.CreateScope())
         {
@@ -47,6 +59,34 @@ public sealed class PasswordResetApiTests
         var db = read.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
         Assert.Null((await db.Accounts.SingleAsync()).PasswordResetTokenHash);
         Assert.Single(await db.LoginSessions.Where(s => s.IsRevoked).ToListAsync());
+    }
+
+    [Fact]
+    public async Task Failed_smtp_attempt_retries_the_same_protected_link_from_storage()
+    {
+        using var factory = new ApiFactory(testAuthentication: false);
+        await factory.InitializeDatabaseAsync();
+        using var client = factory.CreateClient();
+        await Register(client, factory);
+        var failure = new TaskCompletionSource<ConfirmationEmail>(TaskCreationOptions.RunContinuationsAsynchronously);
+        factory.Mail.ObserveDelivery = mail => failure.TrySetResult(mail);
+        factory.Mail.Fail = true;
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = Email })).StatusCode);
+        var unsent = await failure.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsJsonAsync("/api/auth/forgot-password", new { email = Email })).StatusCode);
+        using (var scope = factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OutfitlyDbContext>();
+            var delivery = await db.Set<PasswordResetDelivery>().SingleAsync();
+            var account = await db.Accounts.SingleAsync();
+            Assert.Equal(account.PasswordResetTokenHash, delivery.TokenHash);
+            Assert.DoesNotContain(unsent.Token, delivery.ProtectedToken);
+            factory.Mail.Fail = false;
+            await db.Set<PasswordResetDelivery>().ExecuteUpdateAsync(update => update.SetProperty(row => row.DueAtUtc, DateTime.UtcNow));
+        }
+        Assert.Equal(unsent, await WaitForResetMail(factory));
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PostAsJsonAsync("/api/auth/reset-password",
+            new { unsent.Token, password = "replacement password" })).StatusCode);
     }
 
     [Fact]

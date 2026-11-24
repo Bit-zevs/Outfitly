@@ -29,14 +29,12 @@ public static class AccountSettingsEndpoints
         }).RequireAuthorization(CurrentActor.PolicyName).RequireRateLimiting("account-access");
 
         auth.MapPost("/me/email-change", async (EmailChangeRequest request, HttpContext context, AccountService accounts,
-            IUnitOfWork unitOfWork, IConfirmationEmailSender sender, CancellationToken ct) =>
+            IUnitOfWork unitOfWork, IAnonymousAccountMail mail, CancellationToken ct) =>
         {
             var email = await accounts.RequestEmailChangeAsync(CurrentActor.Id(context.User), request.Email, request.CurrentPassword, ct);
             await unitOfWork.SaveChangesAsync(ct);
-            var sent = true;
-            try { await sender.SendAsync(email, ct); }
-            catch (EmailDeliveryException) { sent = false; }
-            return Results.Json(new { pendingEmail = email.Email, confirmationEmailSent = sent }, statusCode: 202);
+            await mail.EnqueueAsync(email, ct);
+            return Results.Accepted(value: new { pendingEmail = email.Email });
         }).RequireAuthorization(CurrentActor.PolicyName).RequireRateLimiting("account-access");
 
         auth.MapDelete("/me/email-change", async (HttpContext context, AccountService accounts, IUnitOfWork unitOfWork, ISupportAdminAccess supportAdmins, CancellationToken ct) =>

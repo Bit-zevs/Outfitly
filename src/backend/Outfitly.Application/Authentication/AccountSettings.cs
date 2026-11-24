@@ -38,7 +38,6 @@ public sealed partial class AccountService
         var address = Email(email);
         var normalized = address.ToUpperInvariant();
         if (normalized == account.NormalizedEmail) throw new ArgumentException("Choose a different email address.");
-        if (await store.FindByEmailAsync(normalized, cancellationToken) is not null) throw new AccountConflictException();
         var now = clock.GetUtcNow().UtcDateTime;
         if (account.EmailChangeIssuedAtUtc is { } issued && issued.AddSeconds(60) > now)
             throw new ConfirmationTooFrequentException();

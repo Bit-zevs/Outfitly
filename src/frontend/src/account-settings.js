@@ -77,7 +77,7 @@ export function accountSettings(ctx) {
           if (!ctx.isCurrent()) return;
           form.elements.email.value = result.pendingEmail;
           markClean(form); updateIdentity();
-          document.querySelector('#email-status').textContent = result.confirmationEmailSent ? 'Письмо отправлено на новый адрес. Подтвердите его по ссылке.' : 'Запрос сохранён, но письмо отправить не удалось. Повторите отправку через минуту.';
+          document.querySelector('#email-status').textContent = 'Запрос принят. Проверьте почту на новом адресе и подтвердите его по ссылке.';
         });
       };
       forms[2].onsubmit = event => {

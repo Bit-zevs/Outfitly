@@ -54,6 +54,9 @@ builder.Services.AddScoped<IConfirmationEmailSender, Outfitly.Infrastructure.Aut
 builder.Services.AddSingleton<AnonymousAccountMail>();
 builder.Services.AddSingleton<IAnonymousAccountMail>(provider => provider.GetRequiredService<AnonymousAccountMail>());
 builder.Services.AddHostedService(provider => provider.GetRequiredService<AnonymousAccountMail>());
+builder.Services.AddScoped<Outfitly.Infrastructure.Authentication.PasswordResetOutbox>();
+builder.Services.AddScoped<PasswordResetMail>();
+builder.Services.AddHostedService<PasswordResetMailWorker>();
 builder.Services.AddScoped<SessionCookieEvents>();
 builder.Services.AddDataProtection().SetApplicationName("Outfitly");
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>

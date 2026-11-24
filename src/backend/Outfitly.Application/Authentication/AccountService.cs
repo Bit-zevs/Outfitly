@@ -64,17 +64,19 @@ public sealed partial class AccountService(IAccountStore store, IAccountPassword
 
     private static string TokenHash(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
-    public async Task<ConfirmationEmail?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default)
+    public async Task<IssuedPasswordReset?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default)
     {
         var account = await store.FindByEmailAsync(Email(email).ToUpperInvariant(), cancellationToken);
         var now = clock.GetUtcNow().UtcDateTime;
         if (account is null || !account.EmailConfirmed ||
             account.PasswordResetTokenHash is not null && account.PasswordResetExpiresAtUtc > now) return null;
         var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        account.PasswordResetTokenHash = TokenHash(token);
+        var hash = TokenHash(token);
+        var expires = now.AddHours(1);
+        account.PasswordResetTokenHash = hash;
         account.PasswordResetIssuedAtUtc = now;
-        account.PasswordResetExpiresAtUtc = now.AddHours(1);
-        return new ConfirmationEmail(account.Email, token, AccountEmailPurpose.PasswordReset);
+        account.PasswordResetExpiresAtUtc = expires;
+        return new IssuedPasswordReset(token, hash, now, expires);
     }
 
     public async Task ResetPasswordAsync(string token, string password, CancellationToken cancellationToken = default)
