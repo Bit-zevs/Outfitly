@@ -6,7 +6,7 @@ import { discover, wardrobe } from '../../src/frontend/src/pages.js';
 import { parseRoute } from '../../src/frontend/src/router.js';
 import { pagination } from '../../src/frontend/src/components.js';
 const { JSDOM } = createRequire(new URL('../../src/frontend/package.json', import.meta.url))('jsdom');
-test('form applies all fields together, resets page and restores URL selections', t => {
+test('sorting applies immediately and leaves edited filters for Apply', t => {
   const route = parseRoute('#/wardrobe?search=linen&color=removed&brandMissing=true&page=4&sort=nameDesc');
   const dom = new JSDOM(wardrobeFilters(route, { colors: ['<white>', null], brands: [null], sizes: ['m'] }, 2));
   const previous = globalThis.document; globalThis.document = dom.window.document;
@@ -18,8 +18,13 @@ test('form applies all fields together, resets page and restores URL selections'
   form.elements.search.value = ' cotton ';
   form.elements.category.value = 'Top'; form.elements.size.value = 'value:m'; form.elements.publication.value = 'private';
   form.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+  form.elements.sort.value = 'newest';
   form.elements.sort.dispatchEvent(new dom.window.Event('change'));
-  assert.equal(target, undefined);
+  const sorted = parseRoute('#' + target);
+  assert.equal(sorted.query.get('sort'), 'newest');
+  assert.equal(sorted.query.get('search'), 'linen');
+  assert.equal(sorted.query.has('category'), false);
+  assert.equal(sorted.query.has('page'), false);
   const apply = form.querySelector('button[type="submit"]');
   assert.equal(apply?.textContent, 'Применить');
   apply.click();
@@ -28,6 +33,7 @@ test('form applies all fields together, resets page and restores URL selections'
   assert.equal(next.query.get('color'), 'removed'); assert.equal(next.query.get('size'), 'm');
   assert.equal(next.query.get('publication'), 'private'); assert.equal(next.query.get('category'), 'Top');
   assert.equal(next.query.has('page'), false);
+  assert.equal(next.query.get('sort'), 'newest');
   assert.equal(document.querySelector('a').getAttribute('href'), '#/wardrobe');
   assert.match(dom.serialize(), /&lt;white&gt;/);
   assert.equal(wardrobeQuery(next.query).get('brandMissing'), 'true');

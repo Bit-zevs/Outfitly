@@ -48,7 +48,7 @@ export async function profilePage(ctx, username) {
   }
   return { title: `@${user.username}`, html: `<section id="public-profile-header">${heading()}</section><p id="follow-status" class="sr-only" role="status"></p><p id="follow-error" class="error" role="alert" tabindex="-1" hidden></p>
     <nav class="tabs" aria-label="Коллекция пользователя">${[['items', 'Вещи'], ['outfits', 'Образы'], ['followers', `Подписчики: ${user.followersCount || 0}`], ['following', `Подписки: ${user.followingCount || 0}`]].map(([tab, label]) => link(tab === 'items' ? base : `${base}?tab=${tab}`, label, tab === kind ? 'selected' : '')).join('')}</nav>
-    ${page.items.length ? `<div class="${kind === 'outfits' ? 'outfit-grid' : 'cards'}">${page.items.map(resource => people ? personCard(resource) : kind === 'items' ? itemCard(resource, `${base}/items`) : outfitCard(resource, `${base}/outfits`)).join('')}</div>`
+    ${page.items.length ? `<h2 class="sr-only">${{ items: 'Вещи', outfits: 'Образы', followers: 'Подписчики', following: 'Подписки' }[kind]}</h2><div class="${kind === 'outfits' ? 'outfit-grid' : 'cards'}">${page.items.map(resource => people ? personCard(resource) : kind === 'items' ? itemCard(resource, `${base}/items`) : outfitCard(resource, `${base}/outfits`)).join('')}</div>`
       : empty(people ? 'Список пока пуст' : 'Публикаций пока нет', people ? 'Здесь появятся пользователи.' : 'Здесь появится открытая коллекция пользователя.')}${pagination(ctx.route, page)}`, bind() {
       let pending = false;
       const root = document.querySelector('#public-profile-header');

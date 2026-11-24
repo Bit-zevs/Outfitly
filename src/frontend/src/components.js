@@ -31,8 +31,7 @@ export function outfitSearch(route, page) {
   const query = route.query;
   return `<form class="search-row" id="catalog-search" role="search">
     <div class="search-box"><label><span class="sr-only">Поиск по названию</span><input type="search" name="search" autocomplete="off" data-filter-focus="search" placeholder="Поиск по названию образа…" value="${escape(query.get('search'))}"></label><button class="icon-button" type="submit" data-filter-focus="submit" aria-label="Найти">⌕</button></div>
-    <label class="sort-label">Порядок <select name="sort" id="sort" data-filter-focus="sort"><option value="nameAsc" ${query.get('sort') === 'nameAsc' ? 'selected' : ''}>По имени: А–Я</option><option value="nameDesc" ${query.get('sort') === 'nameDesc' ? 'selected' : ''}>По имени: Я–А</option></select></label>
-    <span class="muted" role="status">Найдено: ${page.total}</span>
+    <div class="catalog-results"><p class="muted">Найдено:&nbsp;${page.total}</p><label class="field">Сортировка <select name="sort" id="sort" data-filter-focus="sort"><option value="nameAsc" ${query.get('sort') === 'nameAsc' ? 'selected' : ''}>По имени: А–Я</option><option value="nameDesc" ${query.get('sort') === 'nameDesc' ? 'selected' : ''}>По имени: Я–А</option></select></label></div>
   </form>`;
 }
 export function pagination(route, page) {
@@ -56,6 +55,6 @@ export function choiceField(label, name, current, values) {
   const options = current && !values.includes(current) ? [current, ...values] : values;
   return `<div class="field"><label for="${name}">${label}</label><select id="${name}" name="${name}"><option value="">Не указан</option>${options.map(value => `<option value="${escape(value)}" ${value === current ? 'selected' : ''}>${escape(value)}</option>`).join('')}</select></div>`;
 }
-export function photoPlaceholder(decorative = false) {
-  return `<span class="photo-placeholder" ${decorative ? 'aria-hidden="true"' : 'role="img" aria-label="Фото не добавлено"'}><svg viewBox="0 0 120 100" fill="none" aria-hidden="true"><path d="M50 28a10 10 0 1 1 15 9l-5 4v9L18 75c-5 3-3 9 3 9h78c6 0 8-6 3-9L60 50" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><small>Фото не добавлено</small></span>`;
+export function photoPlaceholder(decorative = false, message = 'Фото не добавлено') {
+  return `<span class="photo-placeholder" ${decorative ? 'aria-hidden="true"' : `role="img" aria-label="${escape(message)}"`}><svg viewBox="0 0 120 100" fill="none" aria-hidden="true"><path d="M50 28a10 10 0 1 1 15 9l-5 4v9L18 75c-5 3-3 9 3 9h78c6 0 8-6 3-9L60 50" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><small>${escape(message)}</small></span>`;
 }

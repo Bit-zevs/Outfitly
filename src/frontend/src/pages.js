@@ -5,7 +5,7 @@ import { bindEngagement } from './engagement.js';
 
 import { peoplePage, copyAddress, profilePage } from './profiles.js';
 import { ApiError } from './api.js';
-import { badge, categories, collage, crumbs, empty, escape, field, outfitSearch, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
+import { categories, collage, crumbs, empty, escape, field, outfitSearch, itemCard, link, outfitCard, pagination, photo, title } from './components.js';
 import { catalogQuery, changedFilter, safeReturn, shareAddress, profilePath, publicPath } from './router.js';
 import { busy, confirmAction, modal, showError } from './ui.js';
 
@@ -62,7 +62,7 @@ function bindOutfitSearch(ctx) {
 }
 
 function catalogResults(route, page, results) {
-  return `<div class="catalog-update" data-catalog-update role="status"></div><div data-catalog-results>${results}${pagination(route, page)}</div>`;
+  return `<div class="catalog-update sr-only" data-catalog-update data-result-message="Найдено: ${page.total}" role="status"></div><div data-catalog-results>${results}${pagination(route, page)}</div>`;
 }
 
 async function catalogOptions(ctx, path) {
@@ -74,7 +74,7 @@ export async function wardrobe(ctx) {
   const { route } = ctx;
   const optionsPath = '/items/filter-options';
   const [page, options] = await Promise.all([ctx.get(`/items?${wardrobeQuery(route.query)}`), catalogOptions(ctx, optionsPath)]);
-  const results = page.items.length ? `<div class="cards">${page.items.map(item => itemCard(item)).join('')}</div>`
+  const results = page.items.length ? `<h2 class="sr-only">Вещи в гардеробе</h2><div class="cards">${page.items.map(item => itemCard(item)).join('')}</div>`
     : activeWardrobeFilters(route.query).length
       ? empty('Ничего не найдено', 'Измените условия поиска или нажмите «Сбросить фильтры» выше.')
       : empty('Гардероб начинается с одной вещи', 'Добавьте любимую одежду, чтобы собирать из неё образы.', link('/items/new', 'Добавить вещь', 'btn'));
@@ -88,7 +88,7 @@ export async function wardrobe(ctx) {
 export async function outfitsPage(ctx) {
   const { route } = ctx;
   const page = await ctx.get(`/outfits?${catalogQuery(route.query)}`);
-  const results = page.items.length ? `<div class="outfit-grid">${page.items.map(outfit => outfitCard(outfit)).join('')}</div>`
+  const results = page.items.length ? `<h2 class="sr-only">Образы в гардеробе</h2><div class="outfit-grid">${page.items.map(outfit => outfitCard(outfit)).join('')}</div>`
     : route.query.get('search')
       ? empty('Образы не найдены', 'Измените название или сбросьте поиск.', link('/outfits', 'Сбросить поиск', 'btn outline'))
       : empty('Первый образ ещё впереди', 'Соберите комплект из своего гардероба.', link('/outfits/new', 'Создать образ', 'btn'));
@@ -115,8 +115,8 @@ export async function discover(ctx) {
   const outfitsPath = tabs.size ? `/discover?${tabs}` : '/discover';
   tabs.set('tab', 'items');
   const results = data.items.length
-    ? itemsTab ? `<div class="cards">${data.items.map(item => itemCard(item, '/public/items')).join('')}</div>`
-      : `<div class="outfit-grid">${data.items.map(outfit => outfitCard(outfit, '/public/outfits')).join('')}</div>`
+    ? itemsTab ? `<h2 class="sr-only">Публичные вещи</h2><div class="cards">${data.items.map(item => itemCard(item, '/public/items')).join('')}</div>`
+      : `<h2 class="sr-only">Публичные образы</h2><div class="outfit-grid">${data.items.map(outfit => outfitCard(outfit, '/public/outfits')).join('')}</div>`
     : activeWardrobeFilters(route.query, false).length
       ? empty(itemsTab ? 'Вещи не найдены' : 'Образы не найдены', 'Измените запрос или сбросьте фильтры.')
       : empty(itemsTab ? 'Публичных вещей пока нет' : 'Публичных образов пока нет', 'Здесь появятся публикации сообщества.');
@@ -149,7 +149,7 @@ export async function detail(ctx, kind, id, access = 'owner', username = null, e
   const resource = embedded ? embedded.resource : username ? await ctx.get(`/users/${encodeURIComponent(username)}/${kind}/${encodeURIComponent(id)}`) : access === 'shared' ? await ctx.get(`/shared/${kind}/${encodeURIComponent(id)}`) : owner ? await ctx.get(`/${kind}/${id}`) : await publicResource(ctx, kind, id);
   const back = embedded ? embedded.back : owner ? (item ? '/wardrobe' : '/outfits') : username ? `${profilePath(username)}${item ? '' : '?tab=outfits'}` : '/discover';
   const backText = embedded ? embedded.name : owner ? (item ? 'Мой гардероб' : 'Мои образы') : 'Открытая коллекция';
-  return { title: resource.name, html: `${crumbs(back, backText, resource.name)}<section class="detail ${item ? 'item-detail' : ''}"><header class="detail-heading"><h1>${escape(resource.name)}</h1><div class="detail-meta"><p class="eyebrow">${item ? `Вещь / ${escape(categories[resource.category])}` : 'Образ'}${access === 'shared' ? ' / По ссылке' : ''}</p>${owner ? badge(resource.isPublic) : `<span class="badge">${embedded ? 'Вещь из образа' : access === 'shared' ? 'Просмотр по ссылке' : 'Открытая коллекция'}</span>`}</div>${resource.ownerUsername ? `<p class="author-line">${avatar({ username: resource.ownerUsername, avatarUrl: resource.ownerAvatarUrl })}${link(profilePath(resource.ownerUsername), `@${resource.ownerUsername}`)}</p>` : ''}</header><div class="detail-media">${item ? photo(resource, 'detail-photo') : `<div class="detail-collage">${collage(resource)}</div><h2 class="section-title">Вещи в образе</h2><div class="pieces">${resource.items.map(i => owner ? `<a href="#/items/${escape(i.id)}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>` : `<a href="#/${access === 'shared' ? 'shared' : 'public'}/outfits/${escape(id)}/items/${escape(i.id)}${username ? `?username=${encodeURIComponent(username)}` : ''}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>`).join('')}</div>`}</div><div class="detail-description"><dl class="properties">${(item ? [['Категория', categories[resource.category]], ['Бренд', resource.brand], ['Размер', resource.size], ['Цвет', resource.color]] : [['Состав', `${resource.items.length} вещей`]]).map(([k, v]) => `<div><dt>${escape(k)}</dt><dd>${escape(v || 'Не указан')}</dd></div>`).join('')}</dl><h2 class="eyebrow">${item ? 'О вещи' : 'Об образе'}</h2><p class="description">${escape(resource.description || 'Описание пока не добавлено.')}</p>${owner ? `<div class="actions">${link(`/${kind}/${id}/edit`, item ? 'Редактировать' : 'Редактировать образ', 'btn')}<button class="btn outline danger" id="delete-resource">Удалить</button></div><div class="linebox access-panel"><h2>Доступ и ссылки</h2><label class="publication"><span><strong>Публичный доступ</strong><small>Все смогут найти ${item ? 'вещь' : 'образ'} в открытой коллекции.</small></span><input type="checkbox" role="switch" id="publication" ${resource.isPublic ? 'checked' : ''} ${!item && !resource.items.length ? 'disabled' : ''}></label>${!item && !resource.items.length ? '<p class="muted">Добавьте хотя бы одну вещь для публикации и создания ссылки.</p>' : ''}<p class="error" role="alert" tabindex="-1" id="detail-error" hidden></p><div class="access-links"><h3>Доступ по ссылке</h3><p>Любой, у кого есть активная ссылка, сможет открыть ${item ? 'вещь' : 'образ'}, даже если публичный доступ выключен. Ссылку можно отозвать.</p><button class="btn outline" id="share" ${!item && !resource.items.length ? 'disabled' : ''}>Управлять ссылками</button></div></div>` : ''}</div></section>${(!embedded || access === 'public') ? `<section class="linebox social-panel" aria-label="Действия и обсуждение"><div class="social-toolbar"><div class="actions" id="workspace-actions" aria-label="Сохранение и копирование"></div>${!embedded && resource.isPublic && (resource.ownerUsername || owner && ctx.auth.user.username) ? '<button class="btn outline small copy-link-button" id="copy-public-address">Копировать публичную ссылку</button>' : ''} </div><div id="engagement" aria-label="Реакции и обсуждение"></div></section>` : ''}`, bind() {
+  return { title: resource.name, html: `${crumbs(back, backText, resource.name)}<section class="detail ${item ? 'item-detail' : ''}"><header class="detail-heading"><h1>${escape(resource.name)}</h1><div class="detail-meta"><p class="eyebrow">${item ? `Вещь / ${escape(categories[resource.category])}` : 'Образ'}${access === 'shared' ? ' / По ссылке' : ''}</p>${owner ? '' : `<span class="badge">${embedded ? 'Вещь из образа' : access === 'shared' ? 'Просмотр по ссылке' : 'Открытая коллекция'}</span>`}</div>${resource.ownerUsername ? `<p class="author-line">${avatar({ username: resource.ownerUsername, avatarUrl: resource.ownerAvatarUrl })}${link(profilePath(resource.ownerUsername), `@${resource.ownerUsername}`)}</p>` : ''}</header><div class="detail-media">${item ? photo(resource, 'detail-photo') : `<div class="detail-collage">${collage(resource)}</div><h2 class="section-title">Вещи в образе</h2><div class="pieces">${resource.items.map(i => owner ? `<a href="#/items/${escape(i.id)}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>` : `<a href="#/${access === 'shared' ? 'shared' : 'public'}/outfits/${escape(id)}/items/${escape(i.id)}${username ? `?username=${encodeURIComponent(username)}` : ''}">${photo(i, '', true)}<span>${escape(i.name)}</span></a>`).join('')}</div>`}</div><div class="detail-description"><dl class="properties">${(item ? [['Категория', categories[resource.category]], ['Бренд', resource.brand], ['Размер', resource.size], ['Цвет', resource.color]] : [['Состав', `${resource.items.length} вещей`]]).map(([k, v]) => `<div><dt>${escape(k)}</dt><dd>${escape(v || 'Не указан')}</dd></div>`).join('')}</dl><h2 class="eyebrow">${item ? 'О вещи' : 'Об образе'}</h2><p class="description">${escape(resource.description || 'Описание пока не добавлено.')}</p>${owner ? `<div class="actions">${link(`/${kind}/${id}/edit`, item ? 'Редактировать' : 'Редактировать образ', 'btn')}<button class="btn outline danger" id="delete-resource">Удалить</button></div><div class="linebox access-panel"><h2>Кто увидит ${item ? 'вещь' : 'образ'}</h2><p class="access-status">В открытой коллекции: ${resource.isPublic ? 'видно всем' : 'не опубликовано'}</p><label class="publication"><span><strong>Публичный доступ</strong><small>Все смогут найти ${item ? 'вещь' : 'образ'} в открытой коллекции.</small></span><input type="checkbox" role="switch" id="publication" ${resource.isPublic ? 'checked' : ''} ${!item && !resource.items.length ? 'disabled' : ''}></label>${!item && !resource.items.length ? '<p class="muted">Добавьте хотя бы одну вещь для публикации и создания ссылки.</p>' : ''}<p class="access-update" role="status" id="publication-status"></p><p class="error" role="alert" tabindex="-1" id="detail-error" hidden></p><div class="access-links"><h3>Доступ по ссылке</h3><p>Любой, у кого есть активная ссылка, сможет открыть ${item ? 'вещь' : 'образ'}, даже если публичный доступ выключен. Ссылку можно отозвать.</p><button class="btn outline" id="share" ${!item && !resource.items.length ? 'disabled' : ''}>Управлять ссылками</button></div></div>` : ''}</div></section>${(!embedded || access === 'public') ? `<section class="linebox social-panel" aria-label="Действия и обсуждение"><div class="social-toolbar"><div class="actions" id="workspace-actions" aria-label="Сохранение и копирование"></div>${!embedded && resource.isPublic && (resource.ownerUsername || owner && ctx.auth.user.username) ? '<button class="btn outline small copy-link-button" id="copy-public-address">Копировать публичную ссылку</button>' : ''} </div><div id="engagement" aria-label="Реакции и обсуждение"></div></section>` : ''}`, bind() {
     bindWorkspaceActions(ctx, kind, resource, access === 'shared' ? id : null, embedded?.publicOutfitId);
     bindEngagement(ctx, kind, resource, access === 'shared' ? id : null, embedded?.publicOutfitId);
     const copyPublic = document.querySelector('#copy-public-address');
@@ -161,17 +161,30 @@ export async function detail(ctx, kind, id, access = 'owner', username = null, e
     });
     document.querySelector('#publication').onchange = async event => {
       const toggle = event.currentTarget;
+      const status = document.querySelector('#publication-status');
+      const notice = document.querySelector('#detail-error');
+      notice.hidden = true;
       toggle.disabled = true;
-      try { await ctx.api.request(`/${kind}/${id}/publication`, { method: 'PATCH', body: { isPublic: toggle.checked } }); if (ctx.isCurrent()) ctx.refresh(); }
-      catch (error) { if (ctx.isCurrent()) { toggle.checked = resource.isPublic; showError(document.querySelector('#detail-error'), error); } }
-      finally { toggle.disabled = false; }
+      status.textContent = 'Обновляем доступ…';
+      try {
+        await ctx.api.request(`/${kind}/${id}/publication`, { method: 'PATCH', body: { isPublic: toggle.checked } });
+        if (ctx.isCurrent()) ctx.refresh({ focus: '#publication' });
+      } catch (error) {
+        if (ctx.isCurrent()) {
+          toggle.checked = resource.isPublic;
+          showError(notice, error, 'Не удалось изменить доступ. Попробуйте переключить его ещё раз. ');
+        }
+      } finally {
+        status.textContent = '';
+        toggle.disabled = false;
+      }
     };
     document.querySelector('#share').onclick = () => shareDialog(ctx, kind, id);
   } };
 }
 
 function shareDialog(ctx, kind, id) {
-  const dialog = modal('Ссылки для просмотра', '<div id="share-list"></div><p id="share-status" role="status">Загружаем ссылки…</p><p class="error" role="alert" tabindex="-1" hidden></p><button type="button" class="btn outline" id="retry-links" hidden>Повторить загрузку</button><button type="button" class="btn" id="create-link" disabled>Создать ссылку</button>');
+  const dialog = modal('Ссылки для просмотра', '<p id="share-status" role="status">Загружаем ссылки…</p><div id="share-list"></div><p class="error" role="alert" tabindex="-1" hidden></p><div class="actions share-actions"><button type="button" class="btn outline" id="retry-links" hidden>Повторить загрузку</button><button type="button" class="btn" id="create-link" disabled>Создать ссылку</button></div>');
   const list = dialog.querySelector('#share-list');
   const status = dialog.querySelector('#share-status');
   const errorBox = dialog.querySelector('.error');
@@ -196,7 +209,7 @@ function shareDialog(ctx, kind, id) {
         list.querySelector('[data-cancel-revoke]')?.click();
         const confirmation = document.createElement('div');
         confirmation.className = 'share-confirmation';
-        confirmation.innerHTML = '<p>После отзыва по этой ссылке нельзя будет открыть публикацию.</p><div class="actions"><button type="button" class="btn outline small" data-cancel-revoke>Отмена</button><button type="button" class="btn danger small" data-confirm-revoke>Отозвать ссылку</button></div>';
+        confirmation.innerHTML = '<p><strong>Отозвать эту ссылку?</strong></p><p>У тех, кому вы её отправили, пропадёт доступ по этому адресу.</p><div class="actions"><button type="button" class="btn outline small" data-cancel-revoke>Отмена</button><button type="button" class="btn danger small" data-confirm-revoke>Отозвать ссылку</button></div>';
         row.append(confirmation);
         revoke.hidden = true;
         const cancel = confirmation.querySelector('[data-cancel-revoke]');
@@ -216,6 +229,7 @@ function shareDialog(ctx, kind, id) {
     errorBox.hidden = retry.hidden = true;
     let loaded = false;
     let changed = false;
+    if (mutation) status.textContent = index === undefined ? 'Создаём ссылку…' : 'Отзываем ссылку…';
     try {
       if (mutation) { await mutation(); changed = true; }
       if (!active()) return;
@@ -232,7 +246,8 @@ function shareDialog(ctx, kind, id) {
         retry.hidden = false;
         status.textContent = changed ? message : '';
       } else status.textContent = '';
-      showError(errorBox, error);
+      const nextStep = !mutation || changed ? 'Не удалось загрузить список. Нажмите «Повторить загрузку». ' : index === undefined ? 'Не удалось создать ссылку. Попробуйте снова. ' : 'Не удалось отозвать ссылку. Попробуйте снова. ';
+      showError(errorBox, error, nextStep);
     } finally {
       pending = false;
       if (active()) {

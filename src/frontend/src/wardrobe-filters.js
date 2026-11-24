@@ -79,16 +79,14 @@ export function wardrobeFilters(route, options, total) {
     <div class="filter-actions"><button class="btn" type="submit" data-filter-focus="submit">Применить</button><a class="btn outline" href="#${escape(resetPath)}" data-filter-focus="reset" aria-label="Сбросить фильтры">${personal ? 'Сбросить фильтры' : 'Сбросить'}</a></div>
     <div class="catalog-results">
       ${removable ? `<div class="active-filters" role="group" aria-label="Активные фильтры">${removable}</div>` : ''}
-      <p class="muted" role="status">Найдено:&nbsp;${total}</p>${select('sort', 'Сортировка', sorts, query.get('sort') || (personal ? 'nameAsc' : 'newest'))}
+      <p class="muted">Найдено:&nbsp;${total}</p>${select('sort', 'Сортировка', sorts, query.get('sort') || (personal ? 'nameAsc' : 'newest'))}
     </div>
   </form>`;
 }
 export function bindWardrobeFilters(ctx, optionsPath) {
   const form = document.querySelector('#wardrobe-filters');
   const { route } = ctx;
-  if (route.path === '/discover') {
-    form.elements.sort.onchange = () => ctx.navigate(changedFilter(route, 'sort', form.elements.sort.value));
-  }
+  form.elements.sort.onchange = () => ctx.navigate(changedFilter(route, 'sort', form.elements.sort.value));
   form.onsubmit = event => {
     event.preventDefault();
     const query = new URLSearchParams();
